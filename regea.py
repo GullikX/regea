@@ -44,7 +44,7 @@ def evaluateIndividual(individual):
     targetStrings = sys.argv[1:]
 
     try:
-        patternString = toolbox.compile(individual)("a")
+        patternString = toolbox.compile(individual)
     except ValueError:
         return (0.0,)
 
@@ -63,7 +63,7 @@ def evaluateIndividual(individual):
 
 warnings.filterwarnings("error")
 
-pset = deap.gp.PrimitiveSet("MAIN", 1)
+pset = deap.gp.PrimitiveSet("MAIN", 0)
 pset.addPrimitive(primitive_concatenate, 2)
 pset.addPrimitive(primitive_range, 2)
 pset.addPrimitive(primitive_or, 2)
@@ -110,7 +110,7 @@ def main():
     )
 
     patternString = toolbox.compile(halloffame[0])
-    print(f'Generated regex: \'{patternString("a")}\'')
+    print(f"Generated regex: '{patternString}'")
     print(f"Fitness: {evaluateIndividual(halloffame[0])[0]}")
 
 
