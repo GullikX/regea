@@ -36,7 +36,7 @@ def evaluateIndividual(individual):
 
     try:
         pattern = re.compile(patternString("a"))
-    except re.error:
+    except (FutureWarning, re.error):
         return (0.0,)
 
     fitness = 0.0
@@ -47,7 +47,7 @@ def evaluateIndividual(individual):
     return (fitness,)
 
 
-warnings.filterwarnings("ignore")
+warnings.filterwarnings("error")
 
 pset = deap.gp.PrimitiveSet("MAIN", 1)
 pset.addPrimitive(primitive_concatenate, 2)
