@@ -19,10 +19,20 @@ def primitive_concatenate(left, right):
 
 
 def primitive_range(left, right):
+    if len(left) != 1 or len(right) != 1:
+        raise ValueError
+    if left.islower() and not right.islower():
+        raise ValueError
+    if left.isupper() and not right.isupper():
+        raise ValueError
+    if left.isdecimal and not right.isdecimal():
+        raise ValueError
     return f"[{left}-{right}]"
 
 
 def primitive_or(left, right):
+    if len(left) != 1 or len(right) != 1:
+        raise ValueError
     return f"[{left}|{right}]"
 
 
@@ -32,10 +42,14 @@ def primitive_randomAlphanumericChar():
 
 def evaluateIndividual(individual):
     targetStrings = sys.argv[1:]
-    patternString = toolbox.compile(individual)
 
     try:
-        pattern = re.compile(patternString("a"))
+        patternString = toolbox.compile(individual)("a")
+    except ValueError:
+        return (0.0,)
+
+    try:
+        pattern = re.compile(patternString)
     except (FutureWarning, re.error):
         return (0.0,)
 
