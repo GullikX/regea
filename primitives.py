@@ -18,6 +18,10 @@ def regexRange(left, right):
         raise ValueError
     if left.isdecimal and not right.isdecimal():
         raise ValueError
+    if left.isalpha() and ord(left) > ord(right):
+        raise ValueError
+    if left.isdecimal and int(left) > int(right):
+        raise ValueError
     return f"[{left}-{right}]"
 
 

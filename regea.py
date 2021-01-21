@@ -9,6 +9,7 @@ import numpy
 import operator
 import random
 import re
+import string
 import sys
 import warnings
 
@@ -17,8 +18,14 @@ import primitives
 randomSeed = 318  # consistent random numbers for testing purposes
 populationSize = 10000
 nGenerations = 50
-crossoverProbability = 0.25
-mutationProbability = 0.75
+crossoverProbability = 0.75
+mutationProbability = 0.20
+
+nUppercaseLetters = len(string.ascii_lowercase)
+nLowercaseLetters = len(string.ascii_uppercase)
+nDigits = len(string.digits)
+nSpecialCharacters = 0  # ignore for now
+nAllowedCharacters = nUppercaseLetters + nLowercaseLetters + nDigits + nSpecialCharacters
 
 
 def evaluateIndividual(individual):
@@ -38,10 +45,32 @@ def evaluateIndividual(individual):
     for string in targetStrings:
         match = pattern.search(string)
         if match is not None:
-            fitness += (match.span()[1] - match.span()[0]) / len(string) / len(targetStrings)
-    fitness -= 0.01 * patternString.count("[")
-    fitness -= 0.01 * patternString.count("]")
-    fitness -= 0.10 * patternString.count(".")
+            isInsideBracket = False
+
+            # For each part of the regex, fitness += 1 / (#charaters that could have been matched)
+            for iChar in range(len(patternString)):
+                if isInsideBracket:
+                    if patternString[iChar] == "]":
+                        isInsideBracket = False
+                    continue
+                if patternString[iChar].isalnum():
+                    fitness += 1.0 / len(string)
+                elif patternString[iChar] == ".":
+                    fitness += 1.0 / nAllowedCharacters / len(string)
+                elif patternString[iChar] == "[":
+                    isInsideBracket = True
+                    if patternString[iChar + 2] == "|":
+                        rangeSize = 2
+                    if patternString[iChar + 2] == "-":
+                        rangeMin = patternString[iChar + 1]
+                        rangeMax = patternString[iChar + 3]
+                        if rangeMin.isalpha():
+                            rangeSize = ord(rangeMax) - ord(rangeMin) + 1
+                        if rangeMin.isdecimal:
+                            rangeSize = int(rangeMax) - int(rangeMin) + 1
+                    fitness += (1.0 / rangeSize) / len(string)
+
+    fitness /= len(targetStrings)
     return (fitness,)
 
 
