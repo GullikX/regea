@@ -29,5 +29,17 @@ def regexOr(left, right):
     return f"[{left}|{right}]"
 
 
-def randomAlphanumericChar():
-    return random.choice(string.ascii_letters + string.digits + ".")
+def randomLowercaseLetter():
+    return random.choice(string.ascii_lowercase)
+
+
+def randomUppercaseLetter():
+    return random.choice(string.ascii_uppercase)
+
+
+def randomDigit():
+    return random.choice(string.digits)
+
+
+def wildcard():
+    return "."
