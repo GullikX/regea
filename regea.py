@@ -9,39 +9,10 @@ import numpy
 import operator
 import random
 import re
-import string
 import sys
 import warnings
 
-
-def primitive_concatenate(left, right):
-    return left + right
-
-
-def primitive_range(left, right):
-    if len(left) != 1 or len(right) != 1:
-        raise ValueError
-    if left == "." or right == ".":
-        return "."
-    if left.islower() and not right.islower():
-        raise ValueError
-    if left.isupper() and not right.isupper():
-        raise ValueError
-    if left.isdecimal and not right.isdecimal():
-        raise ValueError
-    return f"[{left}-{right}]"
-
-
-def primitive_or(left, right):
-    if len(left) != 1 or len(right) != 1:
-        raise ValueError
-    if left == "." or right == ".":
-        return "."
-    return f"[{left}|{right}]"
-
-
-def primitive_randomAlphanumericChar():
-    return random.choice(string.ascii_letters + string.digits + ".")
+import primitives
 
 
 def evaluateIndividual(individual):
@@ -71,10 +42,10 @@ def evaluateIndividual(individual):
 warnings.filterwarnings("error")
 
 pset = deap.gp.PrimitiveSet("MAIN", 0)
-pset.addPrimitive(primitive_concatenate, 2)
-pset.addPrimitive(primitive_range, 2)
-pset.addPrimitive(primitive_or, 2)
-pset.addEphemeralConstant("rand", primitive_randomAlphanumericChar)
+pset.addPrimitive(primitives.concatenate, 2)
+pset.addPrimitive(primitives.regexRange, 2)
+pset.addPrimitive(primitives.regexOr, 2)
+pset.addEphemeralConstant("rand", primitives.randomAlphanumericChar)
 
 deap.creator.create("FitnessMax", deap.base.Fitness, weights=(1.0,))
 deap.creator.create("Individual", deap.gp.PrimitiveTree, fitness=deap.creator.FitnessMax)
