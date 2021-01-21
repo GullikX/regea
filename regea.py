@@ -86,11 +86,15 @@ def main():
     mstats.register("min", numpy.min)
     mstats.register("max", numpy.max)
 
-    pop, log = deap.algorithms.eaSimple(
-        population, toolbox, 0.5, 0.1, 10, stats=mstats, halloffame=halloffame, verbose=False
-    )
+    try:
+        pop, log = deap.algorithms.eaSimple(
+            population, toolbox, 1.5, 0.1, 10, stats=mstats, halloffame=halloffame, verbose=True
+        )
+    except KeyboardInterrupt:
+        pass
 
     patternString = toolbox.compile(halloffame[0])
+    print()
     print(f"Generated regex: '{patternString}'")
     print(f"Fitness: {evaluateIndividual(halloffame[0])[0]}")
 
