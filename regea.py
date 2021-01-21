@@ -14,6 +14,12 @@ import warnings
 
 import primitives
 
+randomSeed = 318  # consistent random numbers for testing purposes
+populationSize = 10000
+nGenerations = 50
+crossoverProbability = 0.25
+mutationProbability = 0.75
+
 
 def evaluateIndividual(individual):
     targetStrings = sys.argv[1:]
@@ -73,9 +79,10 @@ def main():
     if len(sys.argv) == 1:
         print(f"usage: {sys.argv[0]} targetString1 [targetString2] ...")
         return 1
-    random.seed(318)
 
-    population = toolbox.population(n=10000)
+    random.seed(randomSeed)
+
+    population = toolbox.population(n=populationSize)
     halloffame = deap.tools.HallOfFame(1)
 
     stats_fit = deap.tools.Statistics(lambda ind: ind.fitness.values)
@@ -88,7 +95,14 @@ def main():
 
     try:
         pop, log = deap.algorithms.eaSimple(
-            population, toolbox, 1.5, 0.1, 10, stats=mstats, halloffame=halloffame, verbose=True
+            population,
+            toolbox,
+            crossoverProbability,
+            mutationProbability,
+            nGenerations,
+            stats=mstats,
+            halloffame=halloffame,
+            verbose=True,
         )
     except KeyboardInterrupt:
         pass
