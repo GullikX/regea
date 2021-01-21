@@ -21,6 +21,8 @@ def primitive_concatenate(left, right):
 def primitive_range(left, right):
     if len(left) != 1 or len(right) != 1:
         raise ValueError
+    if left == "." or right == ".":
+        return "."
     if left.islower() and not right.islower():
         raise ValueError
     if left.isupper() and not right.isupper():
@@ -33,11 +35,13 @@ def primitive_range(left, right):
 def primitive_or(left, right):
     if len(left) != 1 or len(right) != 1:
         raise ValueError
+    if left == "." or right == ".":
+        return "."
     return f"[{left}|{right}]"
 
 
 def primitive_randomAlphanumericChar():
-    return random.choice(string.ascii_letters + string.digits)
+    return random.choice(string.ascii_letters + string.digits + ".")
 
 
 def evaluateIndividual(individual):
@@ -58,6 +62,9 @@ def evaluateIndividual(individual):
         match = pattern.search(string)
         if match is not None:
             fitness += (match.span()[1] - match.span()[0]) / len(string) / len(targetStrings)
+    fitness -= 0.01 * patternString.count("[")
+    fitness -= 0.01 * patternString.count("]")
+    fitness -= 0.10 * patternString.count(".")
     return (fitness,)
 
 
