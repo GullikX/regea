@@ -15,11 +15,11 @@ import warnings
 
 import primitives
 
-randomSeed = 318  # consistent random numbers for testing purposes
+randomSeed = 128  # consistent random numbers for testing purposes
 populationSize = 10000
-nGenerations = 50
-crossoverProbability = 0.75
-mutationProbability = 0.20
+nGenerations = 500
+crossoverProbability = 0.10
+mutationProbability = 0.05
 
 nUppercaseLetters = len(string.ascii_lowercase)
 nLowercaseLetters = len(string.ascii_uppercase)

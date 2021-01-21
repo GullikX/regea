@@ -12,6 +12,8 @@ def regexRange(left, right):
         raise ValueError
     if left == "." or right == ".":
         return "."
+    if left == right:
+        return left
     if left.islower() and not right.islower():
         raise ValueError
     if left.isupper() and not right.isupper():
@@ -19,9 +21,9 @@ def regexRange(left, right):
     if left.isdecimal and not right.isdecimal():
         raise ValueError
     if left.isalpha() and ord(left) > ord(right):
-        raise ValueError
+        return f"[{right}-{left}]"
     if left.isdecimal and int(left) > int(right):
-        raise ValueError
+        return f"[{right}-{left}]"
     return f"[{left}-{right}]"
 
 
