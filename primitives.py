@@ -30,6 +30,8 @@ def regexOr(left, right):
         raise ValueError
     if left == "." or right == ".":
         return "."
+    if left == right:
+        return left
     return f"[{left}|{right}]"
 
 
