@@ -23,8 +23,12 @@ def digit():
     return "[0-9]"
 
 
+def space():
+    return "[ ]"
+
+
 def specialCharacter():
-    return "[^a-zA-Z0-9]"
+    return "[^a-zA-Z0-9 ]"
 
 
 def wildcard():

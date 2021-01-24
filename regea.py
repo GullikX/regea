@@ -48,6 +48,7 @@ pset.addPrimitive(primitives.optional, 1)
 pset.addEphemeralConstant("lowercaseLetter", primitives.lowercaseLetter)
 pset.addEphemeralConstant("uppercaseLetter", primitives.uppercaseLetter)
 pset.addEphemeralConstant("digit", primitives.digit)
+pset.addEphemeralConstant("space", primitives.space)
 pset.addEphemeralConstant("specialCharacter", primitives.specialCharacter)
 pset.addEphemeralConstant("wildcard", primitives.wildcard)
 
