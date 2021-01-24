@@ -27,15 +27,16 @@ def evaluateIndividual(individual):
     patternString = toolbox.compile(individual)
     pattern = re.compile(patternString)
 
+    baseFitness = (
+        patternString.count("]")
+        - patternString.count("]?")
+        + 0.5 * (patternString.count(".") - patternString.count(".?"))
+    )
     fitness = 0.0
-    for string in targetStrings:
-        match = pattern.search(string)
+    for targetString in targetStrings:
+        match = pattern.search(targetString)
         if match is not None:
-            isInsideBracket = False
-            fitness += patternString.count("]") / len(string)
-            fitness -= patternString.count("]?") / len(string)
-            fitness += 0.5 * patternString.count(".") / len(string)
-            fitness -= 0.5 * patternString.count(".?") / len(string)
+            fitness += baseFitness / len(targetString)
 
     fitness /= len(targetStrings)
     return (fitness,)
