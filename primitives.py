@@ -23,5 +23,9 @@ def digit():
     return "[0-9]"
 
 
+def specialCharacter():
+    return "[^a-zA-Z0-9]"
+
+
 def wildcard():
     return "."

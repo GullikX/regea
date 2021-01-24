@@ -20,12 +20,6 @@ nGenerations = 500
 crossoverProbability = 0.10
 mutationProbability = 0.05
 
-nUppercaseLetters = len(string.ascii_lowercase)
-nLowercaseLetters = len(string.ascii_uppercase)
-nDigits = len(string.digits)
-nSpecialCharacters = 0  # ignore for now
-nAllowedCharacters = nUppercaseLetters + nLowercaseLetters + nDigits + nSpecialCharacters
-
 
 def evaluateIndividual(individual):
     targetStrings = sys.argv[1:]
@@ -53,6 +47,7 @@ pset.addPrimitive(primitives.optional, 1)
 pset.addEphemeralConstant("lowercaseLetter", primitives.lowercaseLetter)
 pset.addEphemeralConstant("uppercaseLetter", primitives.uppercaseLetter)
 pset.addEphemeralConstant("digit", primitives.digit)
+pset.addEphemeralConstant("specialCharacter", primitives.specialCharacter)
 pset.addEphemeralConstant("wildcard", primitives.wildcard)
 
 deap.creator.create("FitnessMax", deap.base.Fitness, weights=(1.0,))
