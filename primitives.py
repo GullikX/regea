@@ -7,46 +7,20 @@ def concatenate(left, right):
     return left + right
 
 
-def regexRange(left, right):
-    if len(left) != 1 or len(right) != 1:
-        raise ValueError
-    if left == "." or right == ".":
-        return "."
-    if left == right:
-        return left
-    if left.islower() and not right.islower():
-        raise ValueError
-    if left.isupper() and not right.isupper():
-        raise ValueError
-    if left.isdecimal and not right.isdecimal():
-        raise ValueError
-    if left.isalpha() and ord(left) > ord(right):
-        return f"[{right}-{left}]"
-    if left.isdecimal and int(left) > int(right):
-        return f"[{right}-{left}]"
-    return f"[{left}-{right}]"
+def optional(left):
+    return left if left.endswith("?") else f"{left}?"
 
 
-def regexOr(left, right):
-    if len(left) != 1 or len(right) != 1:
-        raise ValueError
-    if left == "." or right == ".":
-        return "."
-    if left == right:
-        return left
-    return f"[{left}|{right}]"
+def lowercaseLetter():
+    return "[a-z]"
 
 
-def randomLowercaseLetter():
-    return random.choice(string.ascii_lowercase)
+def uppercaseLetter():
+    return "[A-Z]"
 
 
-def randomUppercaseLetter():
-    return random.choice(string.ascii_uppercase)
-
-
-def randomDigit():
-    return random.choice(string.digits)
+def digit():
+    return "[0-9]"
 
 
 def wildcard():

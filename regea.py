@@ -11,7 +11,6 @@ import random
 import re
 import string
 import sys
-import warnings
 
 import primitives
 
@@ -31,58 +30,29 @@ nAllowedCharacters = nUppercaseLetters + nLowercaseLetters + nDigits + nSpecialC
 def evaluateIndividual(individual):
     targetStrings = sys.argv[1:]
 
-    try:
-        patternString = toolbox.compile(individual)
-    except ValueError:
-        return (0.0,)
-
-    try:
-        pattern = re.compile(patternString)
-    except (FutureWarning, re.error):
-        return (0.0,)
+    patternString = toolbox.compile(individual)
+    pattern = re.compile(patternString)
 
     fitness = 0.0
     for string in targetStrings:
         match = pattern.search(string)
         if match is not None:
             isInsideBracket = False
-
-            # For each part of the regex, fitness += 1 / (#charaters that could have been matched)
-            for iChar in range(len(patternString)):
-                if isInsideBracket:
-                    if patternString[iChar] == "]":
-                        isInsideBracket = False
-                    continue
-                if patternString[iChar].isalnum():
-                    fitness += 1.0 / len(string)
-                elif patternString[iChar] == ".":
-                    fitness += 1.0 / nAllowedCharacters / len(string)
-                elif patternString[iChar] == "[":
-                    isInsideBracket = True
-                    if patternString[iChar + 2] == "|":
-                        rangeSize = 2
-                    if patternString[iChar + 2] == "-":
-                        rangeMin = patternString[iChar + 1]
-                        rangeMax = patternString[iChar + 3]
-                        if rangeMin.isalpha():
-                            rangeSize = ord(rangeMax) - ord(rangeMin) + 1
-                        if rangeMin.isdecimal:
-                            rangeSize = int(rangeMax) - int(rangeMin) + 1
-                    fitness += (1.0 / rangeSize) / len(string)
+            fitness += patternString.count("]") / len(string)
+            fitness -= patternString.count("]?") / len(string)
+            fitness += 0.5 * patternString.count(".") / len(string)
+            fitness -= 0.5 * patternString.count(".?") / len(string)
 
     fitness /= len(targetStrings)
     return (fitness,)
 
 
-warnings.filterwarnings("error")
-
 pset = deap.gp.PrimitiveSet("MAIN", 0)
 pset.addPrimitive(primitives.concatenate, 2)
-pset.addPrimitive(primitives.regexRange, 2)
-pset.addPrimitive(primitives.regexOr, 2)
-pset.addEphemeralConstant("randomLowercaseLetter", primitives.randomLowercaseLetter)
-pset.addEphemeralConstant("randomUppercaseLetter", primitives.randomUppercaseLetter)
-pset.addEphemeralConstant("randomDigit", primitives.randomDigit)
+pset.addPrimitive(primitives.optional, 1)
+pset.addEphemeralConstant("lowercaseLetter", primitives.lowercaseLetter)
+pset.addEphemeralConstant("uppercaseLetter", primitives.uppercaseLetter)
+pset.addEphemeralConstant("digit", primitives.digit)
 pset.addEphemeralConstant("wildcard", primitives.wildcard)
 
 deap.creator.create("FitnessMax", deap.base.Fitness, weights=(1.0,))
