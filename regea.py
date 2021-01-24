@@ -101,10 +101,41 @@ def main():
     except KeyboardInterrupt:
         pass
 
-    patternString = toolbox.compile(halloffame[0])
+    patternStringBest = toolbox.compile(halloffame[0])
+    patternBest = re.compile(patternStringBest)
+    fitnessBest = evaluateIndividual(halloffame[0])[0]
+
+    targetStrings = sys.argv[1:]
+
+    # Pad beginning
+    matches = [None] * len(targetStrings)
+    for iString in range(len(targetStrings)):
+        matches[iString] = patternBest.match(targetStrings[iString])
+    while matches.count(None):
+        if matches.count(None) < len(targetStrings):
+            patternStringBest = ".?" + patternStringBest
+        else:
+            patternStringBest = "." + patternStringBest
+        patternBest = re.compile(patternStringBest)
+        for iString in range(len(targetStrings)):
+            matches[iString] = patternBest.match(targetStrings[iString])
+
+    # Pad end
+    fullmatches = [None] * len(targetStrings)
+    for iString in range(len(targetStrings)):
+        fullmatches[iString] = patternBest.fullmatch(targetStrings[iString])
+    while fullmatches.count(None):
+        if fullmatches.count(None) < len(targetStrings):
+            patternStringBest += ".?"
+        else:
+            patternStringBest += "."
+        patternBest = re.compile(patternStringBest)
+        for iString in range(len(targetStrings)):
+            fullmatches[iString] = patternBest.fullmatch(targetStrings[iString])
+
     print()
-    print(f"Generated regex: '{patternString}'")
-    print(f"Fitness: {evaluateIndividual(halloffame[0])[0]}")
+    print(f"Generated regex: '^{patternStringBest}$'")
+    print(f"Fitness: {fitnessBest:.3f}")
 
 
 if __name__ == "__main__":
