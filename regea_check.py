@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import numpy
-import re
+import regex
 import sys
 
 inputFilenamePatterns = "regea.report.patterns"
@@ -40,7 +40,7 @@ def main(argv):
         linesMatched = [False] * len(fileContents[iFile])
         frequenciesOk = [False] * len(patternStrings)
         for iPattern in range(len(patternStrings)):
-            pattern = re.compile(patternStrings[iPattern])
+            pattern = regex.compile(patternStrings[iPattern])
             frequency = 0
             for iLine in range(len(fileContents[iFile])):
                 if pattern.search(fileContents[iFile][iLine]) is not None:
