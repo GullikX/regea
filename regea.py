@@ -101,8 +101,6 @@ def generatePattern(targetStrings):
     patternBest = re.compile(patternStringBest)
     fitnessBest = evaluateIndividual(halloffame[0])[0]
 
-    targetStrings = sys.argv[1:]
-
     # Pad beginning
     matches = [None] * len(targetStrings)
     for iString in range(len(targetStrings)):
