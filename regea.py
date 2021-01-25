@@ -17,7 +17,7 @@ import primitives
 # Parameters
 randomSeed = 128  # consistent random numbers for testing purposes
 populationSize = 10000
-nGenerations = 100
+nGenerations = 50
 crossoverProbability = 0.10
 mutationProbability = 0.05
 
@@ -38,10 +38,15 @@ def generatePattern(targetString):
             + 0.5 * (patternString.count(".") - patternString.count(".?"))
         ) / len(targetString)
 
+        if pattern.search(targetString) is None:
+            return 0.0
+
         for fileContent in fileContents:
             for line in fileContent:
-                if pattern.search(targetString) is None:
-                    return 0.0
+                if pattern.search(line) is not None:
+                    break
+            else:
+                return 0.0
 
         return fitness
 
