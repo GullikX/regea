@@ -61,7 +61,7 @@ def generatePattern(targetString):
     pset.addEphemeralConstant("lowercaseLetter", primitives.lowercaseLetter)
     pset.addEphemeralConstant("uppercaseLetter", primitives.uppercaseLetter)
     pset.addEphemeralConstant("digit", primitives.digit)
-    pset.addEphemeralConstant("space", primitives.space)
+    pset.addEphemeralConstant("whitespace", primitives.whitespace)
     pset.addEphemeralConstant("specialCharacter", primitives.specialCharacter)
     pset.addEphemeralConstant("wildcard", primitives.wildcard)
 
