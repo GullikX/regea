@@ -179,7 +179,7 @@ def main(argv):
         with open(outputFilenameFrequencies, "w") as outputFileFrequencies:
             for patternString in patternStrings:
                 outputFilePatterns.write(f"{patternString}\n")
-                pattern = re.compile(patternString)
+                pattern = regex.compile(patternString)
                 frequencyMin = nLines
                 frequencyMax = 0
                 for fileContent in fileContents:
