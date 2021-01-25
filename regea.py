@@ -21,62 +21,52 @@ crossoverProbability = 0.10
 mutationProbability = 0.05
 
 
-def evaluateIndividual(individual):
-    targetStrings = sys.argv[1:]
+def generatePattern(targetStrings):
+    def evaluateIndividual(individual):
+        patternString = toolbox.compile(individual)
+        pattern = re.compile(patternString)
 
-    patternString = toolbox.compile(individual)
-    pattern = re.compile(patternString)
+        baseFitness = (
+            patternString.count("]")
+            - patternString.count("]?")
+            + 0.5 * (patternString.count(".") - patternString.count(".?"))
+        )
+        fitness = 0.0
+        for targetString in targetStrings:
+            match = pattern.search(targetString)
+            if match is not None:
+                fitness += baseFitness / len(targetString)
 
-    baseFitness = (
-        patternString.count("]")
-        - patternString.count("]?")
-        + 0.5 * (patternString.count(".") - patternString.count(".?"))
-    )
-    fitness = 0.0
-    for targetString in targetStrings:
-        match = pattern.search(targetString)
-        if match is not None:
-            fitness += baseFitness / len(targetString)
+        fitness /= len(targetStrings)
+        return (fitness,)
 
-    fitness /= len(targetStrings)
-    return (fitness,)
+    pset = deap.gp.PrimitiveSet("MAIN", 0)
+    pset.addPrimitive(primitives.concatenate, 2)
+    pset.addPrimitive(primitives.optional, 1)
+    pset.addEphemeralConstant("lowercaseLetter", primitives.lowercaseLetter)
+    pset.addEphemeralConstant("uppercaseLetter", primitives.uppercaseLetter)
+    pset.addEphemeralConstant("digit", primitives.digit)
+    pset.addEphemeralConstant("space", primitives.space)
+    pset.addEphemeralConstant("specialCharacter", primitives.specialCharacter)
+    pset.addEphemeralConstant("wildcard", primitives.wildcard)
 
+    deap.creator.create("FitnessMax", deap.base.Fitness, weights=(1.0,))
+    deap.creator.create("Individual", deap.gp.PrimitiveTree, fitness=deap.creator.FitnessMax)
 
-pset = deap.gp.PrimitiveSet("MAIN", 0)
-pset.addPrimitive(primitives.concatenate, 2)
-pset.addPrimitive(primitives.optional, 1)
-pset.addEphemeralConstant("lowercaseLetter", primitives.lowercaseLetter)
-pset.addEphemeralConstant("uppercaseLetter", primitives.uppercaseLetter)
-pset.addEphemeralConstant("digit", primitives.digit)
-pset.addEphemeralConstant("space", primitives.space)
-pset.addEphemeralConstant("specialCharacter", primitives.specialCharacter)
-pset.addEphemeralConstant("wildcard", primitives.wildcard)
+    toolbox = deap.base.Toolbox()
+    toolbox.register("expr", deap.gp.genHalfAndHalf, pset=pset, min_=1, max_=2)
+    toolbox.register("individual", deap.tools.initIterate, deap.creator.Individual, toolbox.expr)
+    toolbox.register("population", deap.tools.initRepeat, list, toolbox.individual)
+    toolbox.register("compile", deap.gp.compile, pset=pset)
 
-deap.creator.create("FitnessMax", deap.base.Fitness, weights=(1.0,))
-deap.creator.create("Individual", deap.gp.PrimitiveTree, fitness=deap.creator.FitnessMax)
+    toolbox.register("evaluate", evaluateIndividual)
+    toolbox.register("select", deap.tools.selTournament, tournsize=3)
+    toolbox.register("mate", deap.gp.cxOnePoint)
+    toolbox.register("expr_mut", deap.gp.genFull, min_=0, max_=2)
+    toolbox.register("mutate", deap.gp.mutUniform, expr=toolbox.expr_mut, pset=pset)
 
-toolbox = deap.base.Toolbox()
-toolbox.register("expr", deap.gp.genHalfAndHalf, pset=pset, min_=1, max_=2)
-toolbox.register("individual", deap.tools.initIterate, deap.creator.Individual, toolbox.expr)
-toolbox.register("population", deap.tools.initRepeat, list, toolbox.individual)
-toolbox.register("compile", deap.gp.compile, pset=pset)
-
-toolbox.register("evaluate", evaluateIndividual)
-toolbox.register("select", deap.tools.selTournament, tournsize=3)
-toolbox.register("mate", deap.gp.cxOnePoint)
-toolbox.register("expr_mut", deap.gp.genFull, min_=0, max_=2)
-toolbox.register("mutate", deap.gp.mutUniform, expr=toolbox.expr_mut, pset=pset)
-
-toolbox.decorate("mate", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=17))
-toolbox.decorate("mutate", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=17))
-
-
-def main():
-    if len(sys.argv) == 1:
-        print(f"usage: {sys.argv[0]} targetString1 [targetString2] ...")
-        return 1
-
-    random.seed(randomSeed)
+    toolbox.decorate("mate", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=17))
+    toolbox.decorate("mutate", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=17))
 
     population = toolbox.population(n=populationSize)
     halloffame = deap.tools.HallOfFame(1)
@@ -135,10 +125,20 @@ def main():
         for iString in range(len(targetStrings)):
             fullmatches[iString] = patternBest.fullmatch(targetStrings[iString])
 
-    print()
-    print(f"Generated regex: '^{patternStringBest}$'")
-    print(f"Fitness: {fitnessBest:.3f}")
+    return patternStringBest
+
+
+def main(argv):
+    if len(argv) == 1:
+        print(f"usage: {sys.argv[0]} targetString1 [targetString2] ...")
+        return 1
+    targetStrings = argv[1:]
+
+    random.seed(randomSeed)
+
+    patternString = generatePattern(targetStrings)
+    print(f"\nGenerated regex: '^{patternString}$'")
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv))
