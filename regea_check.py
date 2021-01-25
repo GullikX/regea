@@ -38,7 +38,8 @@ def main(argv):
     # Check for discrepancies
     for iFile in range(len(inputFiles)):
         linesMatched = [False] * len(fileContents[iFile])
-        frequenciesOk = [False] * len(patternStrings)
+        frequenciesAboveReference = [False] * len(patternStrings)
+        frequenciesBelowReference = [False] * len(patternStrings)
         for iPattern in range(len(patternStrings)):
             pattern = regex.compile(patternStrings[iPattern])
             frequency = 0
@@ -46,7 +47,8 @@ def main(argv):
                 if pattern.search(fileContents[iFile][iLine]) is not None:
                     frequency += 1
                     linesMatched[iLine] = True
-            frequenciesOk[iPattern] = frequency <= frequenciesMax[iPattern] and frequency >= frequenciesMin[iPattern]
+            frequenciesBelowReference[iPattern] = frequency < frequenciesMin[iPattern]
+            frequenciesAboveReference[iPattern] = frequency > frequenciesMax[iPattern]
 
         # Write results to disk
         with open(f"{inputFiles[iFile]}.diff", "w") as fileDiff:
@@ -54,8 +56,13 @@ def main(argv):
                 if not linesMatched[iLine]:
                     fileDiff.write(f"> {fileContents[iFile][iLine]}\n")
             for iPattern in range(len(patternStrings)):
-                if not frequenciesOk[iPattern]:
+                if frequenciesBelowReference[iPattern]:
                     fileDiff.write(f"< {patternStrings[iPattern]}\n")
+                if frequenciesAboveReference[iPattern]:
+                    pattern = regex.compile(patternStrings[iPattern])
+                    for line in fileContents[iFile]:
+                        if pattern.search(line) is not None:
+                            fileDiff.write(f"> {line}\n")
 
 
 if __name__ == "__main__":
