@@ -131,15 +131,34 @@ def generatePattern(targetStrings):
 
 
 def main(argv):
-    if len(argv) == 1:
-        print(f"usage: {sys.argv[0]} targetString1 [targetString2] ...")
-        return 1
-    targetStrings = argv[1:]
-
     random.seed(randomSeed)
 
-    patternString = generatePattern(targetStrings)
-    print(f"\nGenerated regex: '^{patternString}$'")
+    if len(sys.argv) < 2:
+        print(f"usage: {sys.argv[0]} FILE1...")
+        return 1
+    inputFiles = sys.argv[1:]
+    nInputFiles = len(inputFiles)
+
+    fileContents = [None] * nInputFiles
+    for iFile in range(len(inputFiles)):
+        with open(inputFiles[iFile], "r") as f:
+            fileContents[iFile] = f.read().splitlines()
+        fileContents[iFile] = set(filter(None, fileContents[iFile]))
+
+    patternStrings = set()
+
+    # Check for duplicate lines
+    for fileContent in fileContents:
+        for line in fileContent:
+            for fileContentOther in fileContents:
+                if line not in fileContentOther:
+                    break
+            else:
+                patternStrings.add(re.escape(line))
+
+    # Generate regex patterns using EA
+    # patternString = generatePattern(targetStrings)
+    # print(f"\nGenerated regex: '^{patternString}$'")
 
 
 if __name__ == "__main__":
