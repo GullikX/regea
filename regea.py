@@ -14,29 +14,35 @@ import sys
 
 import primitives
 
+# Parameters
 randomSeed = 128  # consistent random numbers for testing purposes
 populationSize = 10000
-nGenerations = 500
+nGenerations = 100
 crossoverProbability = 0.10
 mutationProbability = 0.05
 
+outputFilenamePatterns = "regea.report.patterns"
+outputFilenameFrequencies = "regea.report.frequencies"
 
-def generatePattern(targetStrings):
+# Global variables
+fileContents = []
+
+
+def generatePattern(targetString):
     def evaluatePatternString(patternString):
         pattern = re.compile(patternString)
 
-        baseFitness = (
+        fitness = (
             patternString.count("]")
             - patternString.count("]?")
             + 0.5 * (patternString.count(".") - patternString.count(".?"))
-        )
-        fitness = 0.0
-        for targetString in targetStrings:
-            match = pattern.search(targetString)
-            if match is not None:
-                fitness += baseFitness / len(targetString)
+        ) / len(targetString)
 
-        fitness /= len(targetStrings)
+        for fileContent in fileContents:
+            for line in fileContent:
+                if pattern.search(targetString) is None:
+                    return 0.0
+
         return fitness
 
     def evaluateIndividual(individual):
@@ -102,30 +108,10 @@ def generatePattern(targetStrings):
     fitnessBest = evaluateIndividual(halloffame[0])[0]
 
     # Pad beginning
-    matches = [None] * len(targetStrings)
-    for iString in range(len(targetStrings)):
-        matches[iString] = patternBest.match(targetStrings[iString])
-    while matches.count(None):
-        if matches.count(None) < len(targetStrings):
-            patternStringBest = ".?" + patternStringBest
-        else:
-            patternStringBest = "." + patternStringBest
-        patternBest = re.compile(patternStringBest)
-        for iString in range(len(targetStrings)):
-            matches[iString] = patternBest.match(targetStrings[iString])
+    # TODO
 
     # Pad end
-    fullmatches = [None] * len(targetStrings)
-    for iString in range(len(targetStrings)):
-        fullmatches[iString] = patternBest.fullmatch(targetStrings[iString])
-    while fullmatches.count(None):
-        if fullmatches.count(None) < len(targetStrings):
-            patternStringBest += ".?"
-        else:
-            patternStringBest += "."
-        patternBest = re.compile(patternStringBest)
-        for iString in range(len(targetStrings)):
-            fullmatches[iString] = patternBest.fullmatch(targetStrings[iString])
+    # TODO
 
     return patternStringBest
 
@@ -136,14 +122,16 @@ def main(argv):
     if len(sys.argv) < 2:
         print(f"usage: {sys.argv[0]} FILE1...")
         return 1
-    inputFiles = sys.argv[1:]
-    nInputFiles = len(inputFiles)
 
-    fileContents = [None] * nInputFiles
+    # Load input files
+    inputFiles = sys.argv[1:]
+    fileContents.extend([None] * len(inputFiles))
+    nLines = 0
     for iFile in range(len(inputFiles)):
         with open(inputFiles[iFile], "r") as f:
             fileContents[iFile] = f.read().splitlines()
         fileContents[iFile] = set(filter(None, fileContents[iFile]))
+        nLines += len(fileContents[iFile])
 
     patternStrings = set()
 
@@ -157,8 +145,43 @@ def main(argv):
                 patternStrings.add(re.escape(line))
 
     # Generate regex patterns using EA
-    # patternString = generatePattern(targetStrings)
-    # print(f"\nGenerated regex: '^{patternString}$'")
+    iLine = 0
+    for fileContent in fileContents:
+        for line in fileContent:
+            print(f"Progress: {100 * (iLine) / nLines:.2f}% ({(iLine + 1)}/{nLines}) ...")
+            for patternString in patternStrings:
+                pattern = re.compile(patternString)
+                if pattern.match(line) is not None:
+                    # print("Line matched by previous pattern")
+                    break
+            else:
+                # print("Running EA...")
+                patternString = generatePattern(line)
+                patternStrings.add(patternString)
+                print(f"Generated pattern: '{patternString}'")
+
+            iLine += 1
+
+    # Write results to disk
+    with open(outputFilenamePatterns, "w") as outputFilePatterns:
+        with open(outputFilenameFrequencies, "w") as outputFileFrequencies:
+            for patternString in patternStrings:
+                outputFilePatterns.write(f"{patternString}\n")
+                pattern = re.compile(patternString)
+                frequencyMin = nLines
+                frequencyMax = 0
+                for fileContent in fileContents:
+                    frequency = 0
+                    for line in fileContent:
+                        if pattern.search(line) is not None:
+                            frequency += 1
+                    if frequency < frequencyMin:
+                        frequencyMin = frequency
+                    if frequency > frequencyMax:
+                        frequencyMax = frequency
+                outputFileFrequencies.write(f"{frequencyMin} {frequencyMax}\n")
+
+    print("Done.")
 
 
 if __name__ == "__main__":
