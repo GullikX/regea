@@ -1,10 +1,20 @@
 #!/usr/bin/env python3
-import numpy
+import numpy as np
 import regex
 import sys
 
 inputFilenamePatterns = "regea.report.patterns"
 inputFilenameFrequencies = "regea.report.frequencies"
+threshold = 0.25  # Higher threshold = more output (0 < threshold < 1)
+
+
+def normalDistribution(x, mu, sigma):
+    if sigma == 0:
+        if x == mu:
+            return sys.float_info.max
+        else:
+            return 0
+    return 1 / (sigma * np.sqrt(2 * np.pi)) * np.exp(-((x - mu) ** 2) / (2 * sigma ** 2))
 
 
 def main(argv):
@@ -29,11 +39,11 @@ def main(argv):
     with open(inputFilenameFrequencies, "r") as inputFileFrequencies:
         patternFrequencies.extend(inputFileFrequencies.read().splitlines())
 
-    frequenciesMin = [None] * len(patternFrequencies)
-    frequenciesMax = [None] * len(patternFrequencies)
+    frequencyMeans = [None] * len(patternFrequencies)
+    frequencyVariances = [None] * len(patternFrequencies)
     for iPattern in range(len(patternFrequencies)):
-        frequenciesMin[iPattern] = int(patternFrequencies[iPattern].split()[0])
-        frequenciesMax[iPattern] = int(patternFrequencies[iPattern].split()[1])
+        frequencyMeans[iPattern] = float(patternFrequencies[iPattern].split()[0])
+        frequencyVariances[iPattern] = float(patternFrequencies[iPattern].split()[1])
 
     # Check for discrepancies
     for iFile in range(len(inputFiles)):
@@ -47,8 +57,16 @@ def main(argv):
                 if pattern.search(fileContents[iFile][iLine]) is not None:
                     frequency += 1
                     linesMatched[iLine] = True
-            frequenciesBelowReference[iPattern] = frequency < frequenciesMin[iPattern]
-            frequenciesAboveReference[iPattern] = frequency > frequenciesMax[iPattern]
+            aboveThreshold = normalDistribution(
+                frequency, frequencyMeans[iPattern], np.sqrt(frequencyVariances[iPattern])
+            ) < threshold * normalDistribution(
+                frequencyMeans[iPattern], frequencyMeans[iPattern], np.sqrt(frequencyMeans[iPattern])
+            )
+            if aboveThreshold:
+                if frequency < frequencyMeans[iPattern]:
+                    frequenciesBelowReference[iPattern] = True
+                else:
+                    frequenciesAboveReference[iPattern] = True
 
         # Write results to disk
         with open(f"{inputFiles[iFile]}.diff", "w") as fileDiff:

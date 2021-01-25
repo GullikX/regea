@@ -5,7 +5,7 @@ import deap.base
 import deap.creator
 import deap.gp
 import deap.tools
-import numpy
+import numpy as np
 import operator
 import random
 import regex
@@ -90,10 +90,10 @@ def generatePattern(targetString):
     stats_fit = deap.tools.Statistics(lambda ind: ind.fitness.values)
     stats_size = deap.tools.Statistics(len)
     mstats = deap.tools.MultiStatistics(fitness=stats_fit, size=stats_size)
-    mstats.register("avg", numpy.mean)
-    mstats.register("std", numpy.std)
-    mstats.register("min", numpy.min)
-    mstats.register("max", numpy.max)
+    mstats.register("avg", np.mean)
+    mstats.register("std", np.std)
+    mstats.register("min", np.min)
+    mstats.register("max", np.max)
 
     try:
         pop, log = deap.algorithms.eaSimple(
@@ -172,24 +172,24 @@ def main(argv):
 
             iLine += 1
 
+    # Calculate frequency means and variances
+    frequencies = np.zeros((len(fileContents), len(patternStrings)))
+    patternStringsList = list(patternStrings)
+    for iPattern in range(len(patternStrings)):
+        pattern = regex.compile(patternStringsList[iPattern])
+        for iFile in range(len(fileContents)):
+            for line in fileContents[iFile]:
+                if pattern.search(line) is not None:
+                    frequencies[iFile][iPattern] += 1
+    frequencyMeans = list(frequencies.mean(axis=0))
+    frequencyVariances = list(frequencies.var(axis=0))
+
     # Write results to disk
     with open(outputFilenamePatterns, "w") as outputFilePatterns:
         with open(outputFilenameFrequencies, "w") as outputFileFrequencies:
-            for patternString in patternStrings:
-                outputFilePatterns.write(f"{patternString}\n")
-                pattern = regex.compile(patternString)
-                frequencyMin = nLines
-                frequencyMax = 0
-                for fileContent in fileContents:
-                    frequency = 0
-                    for line in fileContent:
-                        if pattern.search(line) is not None:
-                            frequency += 1
-                    if frequency < frequencyMin:
-                        frequencyMin = frequency
-                    if frequency > frequencyMax:
-                        frequencyMax = frequency
-                outputFileFrequencies.write(f"{frequencyMin} {frequencyMax}\n")
+            for iPattern in range(len(patternStrings)):
+                outputFilePatterns.write(f"{patternStringsList[iPattern]}\n")
+                outputFileFrequencies.write(f"{frequencyMeans[iPattern]} {frequencyVariances[iPattern]}\n")
 
     print("Done.")
 
