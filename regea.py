@@ -35,6 +35,7 @@ def generatePattern(targetString):
         fitness = (
             patternString.count("]")
             - patternString.count("]?")
+            - patternString.count(")?")
             + 0.5 * (patternString.count(".") - patternString.count(".?"))
         ) / len(targetString)
 
