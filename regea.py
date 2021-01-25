@@ -17,7 +17,7 @@ import primitives
 # Parameters
 randomSeed = 128  # consistent random numbers for testing purposes
 populationSize = 10000
-nGenerations = 50
+nGenerations = 25
 crossoverProbability = 0.10
 mutationProbability = 0.05
 
@@ -163,11 +163,9 @@ def main(argv):
             print(f"Progress: {100 * (iLine) / nLines:.2f}% ({(iLine + 1)}/{nLines}) ...")
             for patternString in patternStrings:
                 pattern = regex.compile(patternString)
-                if pattern.match(line) is not None:
-                    # print("Line matched by previous pattern")
+                if pattern.search(line) is not None:
                     break
             else:
-                # print("Running EA...")
                 patternString = generatePattern(line)
                 patternStrings.add(patternString)
                 print(f"Generated pattern: '{patternString}'")
