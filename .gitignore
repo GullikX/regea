@@ -1,2 +1,6 @@
 __pycache__/
 *.pyc
+*.diff
+regea.report.*
+*.txt
+*.log
