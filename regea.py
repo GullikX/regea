@@ -22,8 +22,7 @@ mutationProbability = 0.05
 
 
 def generatePattern(targetStrings):
-    def evaluateIndividual(individual):
-        patternString = toolbox.compile(individual)
+    def evaluatePatternString(patternString):
         pattern = re.compile(patternString)
 
         baseFitness = (
@@ -38,6 +37,11 @@ def generatePattern(targetStrings):
                 fitness += baseFitness / len(targetString)
 
         fitness /= len(targetStrings)
+        return fitness
+
+    def evaluateIndividual(individual):
+        patternString = toolbox.compile(individual)
+        fitness = evaluatePatternString(patternString)
         return (fitness,)
 
     pset = deap.gp.PrimitiveSet("MAIN", 0)
