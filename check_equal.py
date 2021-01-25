@@ -15,19 +15,19 @@ def main():
     for iFile in range(len(inputFiles)):
         with open(inputFiles[iFile], "r") as f:
             fileContents[iFile] = f.read().splitlines()
-        fileContents[iFile] = list(filter(None, fileContents[iFile]))
+        fileContents[iFile] = set(filter(None, fileContents[iFile]))
         nLinesTotal += len(fileContents[iFile])
         print(f"Length of file {iFile}: {len(fileContents[iFile])}")
 
-    # TODO: make time complexity O(n*log(n)) instead of O(n^2)
     nLinesEqual = 0
-    for iFile in range(nInputFiles):
-        for iLine in range(len(fileContents[iFile])):
+    for fileContent in fileContents:
+        for line in fileContent:
             linesEqual = True
-            for iFileOther in range(nInputFiles):
-                for iLineOther in range(len(fileContents[iFileOther])):
-                    if fileContents[iFile][iLine] == fileContents[iFileOther][iLineOther]:
-                        break
+            for fileContentOther in fileContents:
+                if fileContent is fileContentOther:
+                    continue
+                if line in fileContentOther:
+                    break
                 else:
                     linesEqual = False
                     # patternString = re.escape(fileContents[iFile][iLine])
