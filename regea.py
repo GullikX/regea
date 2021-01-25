@@ -8,7 +8,7 @@ import deap.tools
 import numpy
 import operator
 import random
-import re
+import regex
 import string
 import sys
 
@@ -30,7 +30,7 @@ fileContents = []
 
 def generatePattern(targetString):
     def evaluatePatternString(patternString):
-        pattern = re.compile(patternString)
+        pattern = regex.compile(patternString)
 
         fitness = (
             patternString.count("]")
@@ -109,14 +109,20 @@ def generatePattern(targetString):
         pass
 
     patternStringBest = toolbox.compile(halloffame[0])
-    patternBest = re.compile(patternStringBest)
-    fitnessBest = evaluateIndividual(halloffame[0])[0]
 
     # Pad beginning
-    # TODO
+    while evaluatePatternString("." + patternStringBest):
+        patternStringBest = "." + patternStringBest
+    while not evaluatePatternString("^" + patternStringBest):
+        patternStringBest = ".?" + patternStringBest
+    patternStringBest = "^" + patternStringBest
 
     # Pad end
-    # TODO
+    while evaluatePatternString(patternStringBest + "."):
+        patternStringBest += "."
+    while not evaluatePatternString(patternStringBest + "$"):
+        patternStringBest += ".?"
+    patternStringBest += "$"
 
     return patternStringBest
 
@@ -147,7 +153,7 @@ def main(argv):
                 if line not in fileContentOther:
                     break
             else:
-                patternStrings.add(re.escape(line))
+                patternStrings.add(regex.escape(line))
 
     # Generate regex patterns using EA
     iLine = 0
@@ -155,7 +161,7 @@ def main(argv):
         for line in fileContent:
             print(f"Progress: {100 * (iLine) / nLines:.2f}% ({(iLine + 1)}/{nLines}) ...")
             for patternString in patternStrings:
-                pattern = re.compile(patternString)
+                pattern = regex.compile(patternString)
                 if pattern.match(line) is not None:
                     # print("Line matched by previous pattern")
                     break
