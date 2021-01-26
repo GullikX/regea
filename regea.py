@@ -11,6 +11,7 @@ import random
 import regex
 import string
 import sys
+import time
 
 import primitives
 
@@ -129,6 +130,7 @@ def generatePattern(targetString):
 
 
 def main(argv):
+    timeStart = time.time()
     random.seed(randomSeed)
 
     if len(sys.argv) < 2:
@@ -160,7 +162,9 @@ def main(argv):
     iLine = 0
     for fileContent in fileContents:
         for line in fileContent:
-            print(f"Progress: {100 * (iLine) / nLines:.2f}% ({(iLine + 1)}/{nLines}) ...")
+            print(
+                f"[{time.time() - timeStart:.3f}] Progress: {100 * (iLine) / nLines:.2f}% ({(iLine + 1)}/{nLines}) ..."
+            )
             for patternString in patternStrings:
                 pattern = regex.compile(patternString)
                 if pattern.search(line) is not None:
@@ -168,7 +172,7 @@ def main(argv):
             else:
                 patternString = generatePattern(line)
                 patternStrings.add(patternString)
-                print(f"Generated pattern: '{patternString}'")
+                print(f"[{time.time() - timeStart:.3f}] Generated pattern: '{patternString}'")
 
             iLine += 1
 
@@ -185,13 +189,14 @@ def main(argv):
     frequencyVariances = list(frequencies.var(axis=0))
 
     # Write results to disk
+    print(f"[{time.time() - timeStart:.3f}] Writing results to disk...")
     with open(outputFilenamePatterns, "w") as outputFilePatterns:
         with open(outputFilenameFrequencies, "w") as outputFileFrequencies:
             for iPattern in range(len(patternStrings)):
                 outputFilePatterns.write(f"{patternStringsList[iPattern]}\n")
                 outputFileFrequencies.write(f"{frequencyMeans[iPattern]} {frequencyVariances[iPattern]}\n")
 
-    print("Done.")
+    print(f"[{time.time() - timeStart:.3f}] Done.")
 
 
 if __name__ == "__main__":
