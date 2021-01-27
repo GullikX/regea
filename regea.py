@@ -97,19 +97,16 @@ def generatePattern(targetString):
     mstats.register("min", np.min)
     mstats.register("max", np.max)
 
-    try:
-        pop, log = deap.algorithms.eaSimple(
-            population,
-            toolbox,
-            crossoverProbability,
-            mutationProbability,
-            nGenerations,
-            stats=mstats,
-            halloffame=halloffame,
-            verbose=verbose,
-        )
-    except KeyboardInterrupt:
-        pass
+    deap.algorithms.eaSimple(
+        population,
+        toolbox,
+        crossoverProbability,
+        mutationProbability,
+        nGenerations,
+        stats=mstats,
+        halloffame=halloffame,
+        verbose=verbose,
+    )
 
     patternStringBest = toolbox.compile(halloffame[0])
 
