@@ -113,19 +113,34 @@ def generatePattern(targetString):
     patternStringBest = toolbox.compile(halloffame[0])
 
     # Pad beginning
-    while evaluatePatternString("." + patternStringBest):
-        patternStringBest = "." + patternStringBest
-    while not evaluatePatternString("^" + patternStringBest):
-        patternStringBest = ".?" + patternStringBest
+    padMin = 0
+    while evaluatePatternString(f".{{{padMin + 1}}}" + patternStringBest):
+        padMin += 1
+    padMax = padMin
+    while not evaluatePatternString(f"^.{{{padMin},{padMax}}}" + patternStringBest):
+        padMax += 1
+    if padMax > 0:
+        if padMax > padMin:
+            patternStringBest = f".{{{padMin},{padMax}}}" + patternStringBest
+        else:
+            patternStringBest = f".{{{padMin}}}" + patternStringBest
     patternStringBest = "^" + patternStringBest
 
     # Pad end
-    while evaluatePatternString(patternStringBest + "."):
-        patternStringBest += "."
-    while not evaluatePatternString(patternStringBest + "$"):
-        patternStringBest += ".?"
+    padMin = 0
+    while evaluatePatternString(patternStringBest + f".{{{padMin + 1}}}"):
+        padMin += 1
+    padMax = padMin
+    while not evaluatePatternString(patternStringBest + f".{{{padMin},{padMax}}}$"):
+        padMax += 1
+    if padMax > 0:
+        if padMax > padMin:
+            patternStringBest += f".{{{padMin},{padMax}}}"
+        else:
+            patternStringBest += f".{{{padMin}}}"
     patternStringBest += "$"
 
+    assert evaluatePatternString(patternStringBest)
     return patternStringBest
 
 
