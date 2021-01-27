@@ -21,6 +21,7 @@ populationSize = 10000
 nGenerations = 25
 crossoverProbability = 0.10
 mutationProbability = 0.05
+verbose = True
 
 outputFilenamePatterns = "regea.report.patterns"
 outputFilenameFrequencies = "regea.report.frequencies"
@@ -105,7 +106,7 @@ def generatePattern(targetString):
             nGenerations,
             stats=mstats,
             halloffame=halloffame,
-            verbose=True,
+            verbose=verbose,
         )
     except KeyboardInterrupt:
         pass
@@ -177,9 +178,7 @@ def main(argv):
     iLine = 0
     for fileContent in fileContents:
         for line in fileContent:
-            print(
-                f"[{time.time() - timeStart:.3f}] Progress: {100 * (iLine) / nLines:.2f}% ({(iLine + 1)}/{nLines}) ..."
-            )
+            print(f"[{time.time() - timeStart:.3f}] Progress: {100 * (iLine) / nLines:.2f}% ({(iLine + 1)}/{nLines})")
             for patternString in patternStrings:
                 pattern = regex.compile(patternString)
                 if pattern.search(line) is not None:
@@ -187,7 +186,8 @@ def main(argv):
             else:
                 patternString = generatePattern(line)
                 patternStrings.add(patternString)
-                print(f"[{time.time() - timeStart:.3f}] Generated pattern: '{patternString}'")
+                if verbose:
+                    print(f"[{time.time() - timeStart:.3f}] Generated pattern: '{patternString}'")
 
             iLine += 1
 
