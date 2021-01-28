@@ -12,6 +12,7 @@ socketAddress = "/tmp/regea.socket"
 workerExecutable = "./regea_worker.py"
 nWorkersMax = os.cpu_count()
 socketBufferSize = 1024
+socketTimeout = 600  # Seconds
 verbose = True
 
 outputFilenamePatterns = "regea.report.patterns"
@@ -91,19 +92,24 @@ def main(argv):
 
     # Wait for all workers to exit
     print(f"[{time.time() - timeStart:.3f}] Waiting for all worker processes to exit...")
+    sock.settimeout(socketTimeout)
     while nWorkersActive:
-        connection, _ = sock.accept()
-        data = b""
-        while True:
-            chunk = connection.recv(socketBufferSize)
-            if chunk:
-                data += chunk
-            else:
-                break
-        patternString = data.splitlines()[0].decode()
-        if verbose:
-            print(f"[{time.time() - timeStart:.3f}] Generated pattern: '{patternString}'")
-        patterns.add(regex.compile(patternString))
+        try:
+            connection, _ = sock.accept()
+            data = b""
+            while True:
+                chunk = connection.recv(socketBufferSize)
+                if chunk:
+                    data += chunk
+                else:
+                    break
+            patternString = data.splitlines()[0].decode()
+            if verbose:
+                print(f"[{time.time() - timeStart:.3f}] Generated pattern: '{patternString}'")
+            patterns.add(regex.compile(patternString))
+        except socket.timeout:
+            print(f"[{time.time() - timeStart:.3f}] Timed out while waiting for worker process")
+            pass
         nWorkersActive -= 1
 
     # Calculate frequency means and variances
