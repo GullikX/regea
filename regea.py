@@ -160,7 +160,7 @@ def main(argv):
         fileContents[iFile] = set(filter(None, fileContents[iFile]))
         nLines += len(fileContents[iFile])
 
-    patternStrings = set()
+    patterns = set()
 
     # Check for duplicate lines
     for fileContent in fileContents:
@@ -169,33 +169,31 @@ def main(argv):
                 if line not in fileContentOther:
                     break
             else:
-                patternStrings.add(regex.escape(line))
+                patterns.add(regex.compile(regex.escape(line)))
 
     # Generate regex patterns using EA
     iLine = 0
     for fileContent in fileContents:
         for line in fileContent:
             print(f"[{time.time() - timeStart:.3f}] Progress: {100 * (iLine) / nLines:.2f}% ({(iLine + 1)}/{nLines})")
-            for patternString in patternStrings:
-                pattern = regex.compile(patternString)
+            for pattern in patterns:
                 if pattern.search(line) is not None:
                     break
             else:
                 patternString = generatePattern(line)
-                patternStrings.add(patternString)
+                patterns.add(regex.compile(patternString))
                 if verbose:
                     print(f"[{time.time() - timeStart:.3f}] Generated pattern: '{patternString}'")
-
             iLine += 1
 
     # Calculate frequency means and variances
-    frequencies = np.zeros((len(fileContents), len(patternStrings)))
-    patternStringsList = list(patternStrings)
-    for iPattern in range(len(patternStrings)):
-        pattern = regex.compile(patternStringsList[iPattern])
+    print(f"[{time.time() - timeStart:.3f}] Calculating frequency means and variances...")
+    frequencies = np.zeros((len(fileContents), len(patterns)))
+    patternList = list(patterns)
+    for iPattern in range(len(patternList)):
         for iFile in range(len(fileContents)):
             for line in fileContents[iFile]:
-                if pattern.search(line) is not None:
+                if patternList[iPattern].search(line) is not None:
                     frequencies[iFile][iPattern] += 1
     frequencyMeans = list(frequencies.mean(axis=0))
     frequencyVariances = list(frequencies.var(axis=0))
@@ -204,8 +202,8 @@ def main(argv):
     print(f"[{time.time() - timeStart:.3f}] Writing results to disk...")
     with open(outputFilenamePatterns, "w") as outputFilePatterns:
         with open(outputFilenameFrequencies, "w") as outputFileFrequencies:
-            for iPattern in range(len(patternStrings)):
-                outputFilePatterns.write(f"{patternStringsList[iPattern]}\n")
+            for iPattern in range(len(patternList)):
+                outputFilePatterns.write(f"{patternList[iPattern].pattern}\n")
                 outputFileFrequencies.write(f"{frequencyMeans[iPattern]} {frequencyVariances[iPattern]}\n")
 
     print(f"[{time.time() - timeStart:.3f}] Done.")
