@@ -33,7 +33,7 @@ def main(argv):
     for iFile in range(len(inputFiles)):
         with open(inputFiles[iFile], "r") as f:
             fileContents[iFile] = f.read().splitlines()
-        fileContents[iFile] = set(filter(None, fileContents[iFile]))
+        fileContents[iFile] = list(filter(None, fileContents[iFile]))
         nLines += len(fileContents[iFile])
 
     patterns = set()
