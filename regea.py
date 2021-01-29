@@ -45,7 +45,7 @@ def main(argv):
                 if line not in fileContentOther:
                     break
             else:
-                patterns.add(regex.compile(regex.escape(line)))
+                patterns.add(regex.compile(regex.escape(line), regex.MULTILINE))
 
     # Setup socket
     try:
@@ -82,7 +82,7 @@ def main(argv):
                         patternString = data.splitlines()[0].decode()
                         if verbose:
                             print(f"[{time.time() - timeStart:.3f}] Generated pattern: '{patternString}'")
-                        patterns.add(regex.compile(patternString))
+                        patterns.add(regex.compile(patternString, regex.MULTILINE))
                         nWorkersActive -= 1
                     if verbose:
                         print(f"[{time.time() - timeStart:.3f}] Generating pattern to match string: '{line}'")
@@ -113,7 +113,7 @@ def main(argv):
                 patternString = data.splitlines()[0].decode()
                 if verbose:
                     print(f"[{time.time() - timeStart:.3f}] Generated pattern: '{patternString}'")
-                patterns.add(regex.compile(patternString))
+                patterns.add(regex.compile(patternString, regex.MULTILINE))
                 nWorkersActive -= 1
         except socket.timeout:
             print(f"[{time.time() - timeStart:.3f}] Timed out waiting for {nWorkersActive} worker process(es)")
@@ -123,11 +123,10 @@ def main(argv):
     print(f"[{time.time() - timeStart:.3f}] Calculating frequency means and variances...")
     frequencies = np.zeros((len(fileContents), len(patterns)))
     patternList = list(patterns)
-    for iPattern in range(len(patternList)):
-        for iFile in range(len(fileContents)):
-            for line in fileContents[iFile]:
-                if patternList[iPattern].search(line) is not None:
-                    frequencies[iFile][iPattern] += 1
+    for iFile in range(len(fileContents)):
+        content = "\n".join(fileContents[iFile])
+        for iPattern in range(len(patternList)):
+            frequencies[iFile][iPattern] += len(patternList[iPattern].findall(content))
     frequencyMeans = list(frequencies.mean(axis=0))
     frequencyVariances = list(frequencies.var(axis=0))
 
