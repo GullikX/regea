@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import collections
 import deap
 import deap.algorithms
 import deap.base
@@ -41,9 +42,10 @@ def generatePatternString(targetString):
         if pattern.search(targetString) is None:
             return 0.0
 
-        for fileContent in fileContents:
-            for line in fileContent:
+        for iFile in range(len(fileContents)):
+            for line in fileContents[iFile]:
                 if pattern.search(line) is not None:
+                    fileContents[iFile].appendleft(line)
                     break
             else:
                 return 0.0
@@ -154,8 +156,7 @@ def main(argv):
     fileContents.extend([None] * len(inputFiles))
     for iFile in range(len(inputFiles)):
         with open(inputFiles[iFile], "r") as f:
-            fileContents[iFile] = f.read().splitlines()
-        fileContents[iFile] = set(filter(None, fileContents[iFile]))
+            fileContents[iFile] = collections.deque(f.read().splitlines())
 
     # Generate pattern string
     patternString = generatePatternString(targetString)
