@@ -38,7 +38,7 @@ def main(argv):
 
     patterns = set()
 
-    # Check for duplicate lines
+    # Check for duplicate lines (TODO: fix time complexity)
     for fileContent in fileContents:
         for line in fileContent:
             for fileContentOther in fileContents:
