@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import numpy as np
 import os
+import random
 import regex
 import socket
 import subprocess
@@ -34,6 +35,7 @@ def main(argv):
         with open(inputFiles[iFile], "r") as f:
             fileContents[iFile] = f.read().splitlines()
         fileContents[iFile] = list(filter(None, fileContents[iFile]))
+        random.shuffle(fileContents[iFile])
         nLines += len(fileContents[iFile])
 
     patterns = set()
