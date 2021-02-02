@@ -47,7 +47,7 @@ def main(argv):
                 if line not in fileContentOther:
                     break
             else:
-                patterns.add(regex.compile(regex.escape(line), regex.MULTILINE))
+                patterns.add(regex.compile("^" + regex.escape(line) + "$", regex.MULTILINE))
 
     # Setup socket
     try:
