@@ -67,7 +67,7 @@ def generatePatternString(targetString):
         match = patternOptionalSpecialCharSet.search(patternStringTrimmed)
         while match is not None:
             patternStringTrimmed = patternStringTrimmed[: match.span(0)[0]] + patternStringTrimmed[match.span(0)[1] :]
-            baseFitness -= 100 / len(string.punctuation)
+            baseFitness -= 1 / len(string.punctuation)
             match = patternOptionalSpecialCharSet.search(patternStringTrimmed)
         match = patternSpecialCharSet.search(patternStringTrimmed)
         while match is not None:
