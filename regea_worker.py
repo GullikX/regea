@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import collections
 import deap
 import deap.algorithms
 import deap.base
@@ -8,15 +7,14 @@ import deap.gp
 import deap.tools
 import numpy as np
 import operator
-import random
 import regex
 import socket
+import string
 import sys
 
 import primitives
 
 # Parameters
-randomSeed = 128  # consistent random numbers for testing purposes
 populationSize = 10000
 nGenerations = 25
 crossoverProbability = 0.10
@@ -29,26 +27,95 @@ fileContents = []
 
 
 def generatePatternString(targetString):
+    patternOptionalRangeSet = regex.compile("\\[(\\w)-(\\w)\\]\\?")
+    patternRangeSet = regex.compile("\\[(\\w)-(\\w)\\]")
+    patternOptionalSpecialCharSet = regex.compile("\\[\\^a\\-zA\\-Z0\\-9\\\\s\\]\\?")
+    patternSpecialCharSet = regex.compile("\\[\\^a\\-zA\\-Z0\\-9\\\\s\\]")
+    patternOptionalWhitespace = regex.compile("\\(\\[\\\\s\\]\\+\\)\\?")
+    patternWhitespace = regex.compile("\\(\\[\\\\s\\]\\+\\)")
+    patternOptionalWildcard = regex.compile("\\.\\?")
+    patternWildcard = regex.compile("\\.")
+    patternOptionalChar = regex.compile(".\\?")
+
     def evaluatePatternString(patternString):
-        pattern = regex.compile(patternString)
-
-        fitness = (
-            patternString.count("]")
-            - patternString.count("]?")
-            - patternString.count(")?")
-            + 0.5 * (patternString.count(".") - patternString.count(".?"))
-        ) / len(targetString)
-
-        if pattern.search(targetString) is None:
+        if not patternString:
             return 0.0
 
+        pattern = regex.compile(patternString, regex.MULTILINE)
+        match = pattern.search(targetString)
+        if match is None:
+            return 0.0
+
+        baseFitness = 0
+        patternStringTrimmed = patternString
+
+        # Optional range sets
+        match = patternOptionalRangeSet.search(patternStringTrimmed)
+        while match is not None:
+            patternStringTrimmed = patternStringTrimmed[: match.span(0)[0]] + patternStringTrimmed[match.span(0)[1] :]
+            baseFitness -= 1 / (ord(match.group(2)) - ord(match.group(1)) + 1)
+            match = patternOptionalRangeSet.search(patternStringTrimmed)
+
+        # Mandatory range sets
+        match = patternRangeSet.search(patternStringTrimmed)
+        while match is not None:
+            patternStringTrimmed = patternStringTrimmed[: match.span(0)[0]] + patternStringTrimmed[match.span(0)[1] :]
+            baseFitness += 1 / (ord(match.group(2)) - ord(match.group(1)) + 1)
+            match = patternRangeSet.search(patternStringTrimmed)
+
+        # Special character sets (TODO: fix this hack)
+        match = patternOptionalSpecialCharSet.search(patternStringTrimmed)
+        while match is not None:
+            patternStringTrimmed = patternStringTrimmed[: match.span(0)[0]] + patternStringTrimmed[match.span(0)[1] :]
+            baseFitness -= 100 / len(string.punctuation)
+            match = patternOptionalSpecialCharSet.search(patternStringTrimmed)
+        match = patternSpecialCharSet.search(patternStringTrimmed)
+        while match is not None:
+            patternStringTrimmed = patternStringTrimmed[: match.span(0)[0]] + patternStringTrimmed[match.span(0)[1] :]
+            baseFitness += 1 / len(string.punctuation)
+            match = patternSpecialCharSet.search(patternStringTrimmed)
+
+        # Whitespace
+        match = patternOptionalWhitespace.search(patternStringTrimmed)
+        while match is not None:
+            patternStringTrimmed = patternStringTrimmed[: match.span(0)[0]] + patternStringTrimmed[match.span(0)[1] :]
+            baseFitness -= 1 / len(string.punctuation)
+            match = patternOptionalWhitespace.search(patternStringTrimmed)
+        match = patternWhitespace.search(patternStringTrimmed)
+        while match is not None:
+            patternStringTrimmed = patternStringTrimmed[: match.span(0)[0]] + patternStringTrimmed[match.span(0)[1] :]
+            baseFitness += 1 / len(string.punctuation)
+            match = patternWhitespace.search(patternStringTrimmed)
+
+        # Optional wildcards
+        match = patternOptionalWildcard.search(patternStringTrimmed)
+        while match is not None:
+            patternStringTrimmed = patternStringTrimmed[: match.span(0)[0]] + patternStringTrimmed[match.span(0)[1] :]
+            baseFitness -= 1 / (len(string.printable))
+            match = patternOptionalWildcard.search(patternStringTrimmed)
+
+        # Mandatory wildcards
+        match = patternWildcard.search(patternStringTrimmed)
+        while match is not None:
+            patternStringTrimmed = patternStringTrimmed[: match.span(0)[0]] + patternStringTrimmed[match.span(0)[1] :]
+            baseFitness += 1 / len(string.printable)
+            match = patternWildcard.search(patternStringTrimmed)
+
+        # Optional characters
+        match = patternOptionalChar.search(patternStringTrimmed)
+        while match is not None:
+            patternStringTrimmed = patternStringTrimmed[: match.span(0)[0]] + patternStringTrimmed[match.span(0)[1] :]
+            baseFitness -= 1
+            match = patternOptionalChar.search(patternStringTrimmed)
+
+        patternStringTrimmed = patternStringTrimmed.replace("\\", "")  # De-escape stuff
+
+        baseFitness += len(patternStringTrimmed)  # Should only be literal characters left
+
+        fitness = 0.0
         for iFile in range(len(fileContents)):
-            for line in fileContents[iFile]:
-                if pattern.search(line) is not None:
-                    fileContents[iFile].appendleft(line)
-                    break
-            else:
-                return 0.0
+            if pattern.search(fileContents[iFile]) is not None:
+                fitness += baseFitness / len(targetString) / len(fileContents)
 
         return fitness
 
@@ -61,10 +128,14 @@ def generatePatternString(targetString):
     pset.addPrimitive(primitives.concatenate, 2)
     pset.addPrimitive(primitives.optional, 1)
     pset.addEphemeralConstant("lowercaseLetter", primitives.lowercaseLetter)
+    pset.addEphemeralConstant("anyLowercaseLetter", primitives.anyLowercaseLetter)
     pset.addEphemeralConstant("uppercaseLetter", primitives.uppercaseLetter)
+    pset.addEphemeralConstant("anyUppercaseLetter", primitives.anyUppercaseLetter)
     pset.addEphemeralConstant("digit", primitives.digit)
+    pset.addEphemeralConstant("anyDigit", primitives.anyDigit)
     pset.addEphemeralConstant("whitespace", primitives.whitespace)
     pset.addEphemeralConstant("specialCharacter", primitives.specialCharacter)
+    pset.addEphemeralConstant("anySpecialCharacter", primitives.anySpecialCharacter)
     pset.addEphemeralConstant("wildcard", primitives.wildcard)
 
     deap.creator.create("FitnessMax", deap.base.Fitness, weights=(1.0,))
@@ -111,10 +182,12 @@ def generatePatternString(targetString):
 
     # Pad beginning
     padMin = 0
-    while evaluatePatternString(f".{{{padMin + 1}}}" + patternStringBest):
+    while evaluatePatternString(f".{{{padMin + 1}}}" + patternStringBest) > evaluatePatternString(patternStringBest):
         padMin += 1
     padMax = padMin
-    while not evaluatePatternString(f"^.{{{padMin},{padMax}}}" + patternStringBest):
+    while not evaluatePatternString(f"^.{{{padMin},{padMax}}}" + patternStringBest) > evaluatePatternString(
+        patternStringBest
+    ):
         padMax += 1
     if padMax > 0:
         if padMax > padMin:
@@ -125,10 +198,12 @@ def generatePatternString(targetString):
 
     # Pad end
     padMin = 0
-    while evaluatePatternString(patternStringBest + f".{{{padMin + 1}}}"):
+    while evaluatePatternString(patternStringBest + f".{{{padMin + 1}}}") > evaluatePatternString(patternStringBest):
         padMin += 1
     padMax = padMin
-    while not evaluatePatternString(patternStringBest + f".{{{padMin},{padMax}}}$"):
+    while not evaluatePatternString(patternStringBest + f".{{{padMin},{padMax}}}$") > evaluatePatternString(
+        patternStringBest
+    ):
         padMax += 1
     if padMax > 0:
         if padMax > padMin:
@@ -142,8 +217,6 @@ def generatePatternString(targetString):
 
 
 def main(argv):
-    random.seed(randomSeed)
-
     if len(argv) < 2:
         print(f"usage: {argv[0]} FILE1...")
         return 1
@@ -156,7 +229,7 @@ def main(argv):
     fileContents.extend([None] * len(inputFiles))
     for iFile in range(len(inputFiles)):
         with open(inputFiles[iFile], "r") as f:
-            fileContents[iFile] = collections.deque(f.read().splitlines())
+            fileContents[iFile] = f.read()
 
     # Generate pattern string
     patternString = generatePatternString(targetString)
