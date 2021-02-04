@@ -38,7 +38,7 @@ def main(argv):
         random.shuffle(fileContents[iFile])
         nLines += len(fileContents[iFile])
 
-    patterns = set()
+    patterns = {}
 
     # Check for duplicate lines (TODO: fix time complexity)
     for fileContent in fileContents:
@@ -47,7 +47,8 @@ def main(argv):
                 if line not in fileContentOther:
                     break
             else:
-                patterns.add(regex.compile("^" + regex.escape(line) + "$", regex.MULTILINE))
+                patternString = f"^{regex.escape(line)}$"
+                patterns[patternString] = regex.compile(patternString, regex.MULTILINE)
 
     # Setup socket
     try:
@@ -68,8 +69,8 @@ def main(argv):
                 print(
                     f"[{time.time() - timeStart:.3f}] Progress: {100 * (iLine) / nLines:.2f}% ({(iLine + 1)}/{nLines})"
                 )
-                for pattern in patterns:
-                    if pattern.search(line) is not None:
+                for patternString in patterns:
+                    if patterns[patternString].search(line) is not None:
                         break
                 else:
                     if nWorkersActive == nWorkersMax:
@@ -84,7 +85,7 @@ def main(argv):
                         patternString = data.splitlines()[0].decode()
                         if verbose:
                             print(f"[{time.time() - timeStart:.3f}] Generated pattern: '{patternString}'")
-                        patterns.add(regex.compile(patternString, regex.MULTILINE))
+                        patterns[patternString] = regex.compile(patternString, regex.MULTILINE)
                         nWorkersActive -= 1
                     if verbose:
                         print(f"[{time.time() - timeStart:.3f}] Generating pattern to match string: '{line}'")
@@ -115,7 +116,7 @@ def main(argv):
                 patternString = data.splitlines()[0].decode()
                 if verbose:
                     print(f"[{time.time() - timeStart:.3f}] Generated pattern: '{patternString}'")
-                patterns.add(regex.compile(patternString, regex.MULTILINE))
+                patterns[patternString] = regex.compile(patternString, regex.MULTILINE)
                 nWorkersActive -= 1
         except socket.timeout:
             print(f"[{time.time() - timeStart:.3f}] Timed out waiting for {nWorkersActive} worker process(es)")
@@ -124,7 +125,7 @@ def main(argv):
     # Calculate frequency means and variances
     print(f"[{time.time() - timeStart:.3f}] Calculating frequency means and variances...")
     frequencies = np.zeros((len(fileContents), len(patterns)))
-    patternList = list(patterns)
+    patternList = list(patterns.values())
     for iFile in range(len(fileContents)):
         content = "\n".join(fileContents[iFile])
         for iPattern in range(len(patternList)):
