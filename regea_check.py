@@ -84,7 +84,7 @@ def main(argv):
 
         # Write results to disk
         with open(f"{inputFiles[iFile]}.diff", "w") as diffFile:
-            diffFile.write("\n".join(diffFileContents))
+            diffFile.write("\n".join(sorted(list(diffFileContents))))
             diffFile.write("\n")
 
 
