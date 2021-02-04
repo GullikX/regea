@@ -68,19 +68,24 @@ def main(argv):
                 else:
                     frequenciesAboveReference[iPattern] = True
 
+        # Generate diff
+        diffFileContents = set()
+        for iLine in range(len(fileContents[iFile])):
+            if not linesMatched[iLine]:
+                diffFileContents.add(f"> {fileContents[iFile][iLine]}")
+        for iPattern in range(len(patternStrings)):
+            if frequenciesBelowReference[iPattern]:
+                diffFileContents.add(f"< {patternStrings[iPattern]}")
+            if frequenciesAboveReference[iPattern]:
+                pattern = regex.compile(patternStrings[iPattern])
+                for line in fileContents[iFile]:
+                    if pattern.search(line) is not None:
+                        diffFileContents.add(f"> {line}")
+
         # Write results to disk
-        with open(f"{inputFiles[iFile]}.diff", "w") as fileDiff:
-            for iLine in range(len(fileContents[iFile])):
-                if not linesMatched[iLine]:
-                    fileDiff.write(f"> {fileContents[iFile][iLine]}\n")
-            for iPattern in range(len(patternStrings)):
-                if frequenciesBelowReference[iPattern]:
-                    fileDiff.write(f"< {patternStrings[iPattern]}\n")
-                if frequenciesAboveReference[iPattern]:
-                    pattern = regex.compile(patternStrings[iPattern])
-                    for line in fileContents[iFile]:
-                        if pattern.search(line) is not None:
-                            fileDiff.write(f"> {line}\n")
+        with open(f"{inputFiles[iFile]}.diff", "w") as diffFile:
+            diffFile.write("\n".join(diffFileContents))
+            diffFile.write("\n")
 
 
 if __name__ == "__main__":
