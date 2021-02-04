@@ -40,15 +40,24 @@ def main(argv):
 
     patterns = {}
 
-    # Check for duplicate lines (TODO: fix time complexity)
-    for fileContent in fileContents:
-        for line in fileContent:
-            for fileContentOther in fileContents:
-                if line not in fileContentOther:
-                    break
-            else:
-                patternString = f"^{regex.escape(line)}$"
-                patterns[patternString] = regex.compile(patternString, regex.MULTILINE)
+    # Check for duplicate lines
+    fileContentsSorted = [None] * len(fileContents)
+    for iFile in range(len(fileContents)):
+        fileContentsSorted[iFile] = sorted(fileContents[iFile])
+    indices = [0] * len(fileContentsSorted)
+    linesCurrent = [None] * len(fileContents)
+    for iFile in range(len(fileContentsSorted)):
+        linesCurrent[iFile] = fileContentsSorted[iFile][indices[iFile]]
+    while True:
+        if linesCurrent.count(linesCurrent[0]) == len(linesCurrent):
+            patternString = f"^{regex.escape(linesCurrent[0])}$"
+            patterns[patternString] = regex.compile(patternString, regex.MULTILINE)
+        iLineMin = min(range(len(linesCurrent)), key=linesCurrent.__getitem__)
+        indices[iLineMin] += 1
+        try:
+            linesCurrent[iLineMin] = fileContentsSorted[iLineMin][indices[iLineMin]]
+        except IndexError:
+            break
 
     # Setup socket
     try:
