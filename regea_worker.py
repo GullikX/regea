@@ -27,10 +27,8 @@ fileContents = []
 
 
 def generatePatternString(targetString):
-    patternOptionalRangeSet = regex.compile("\\[(\\w)-(\\w)\\]\\?")
-    patternRangeSet = regex.compile("\\[(\\w)-(\\w)\\]")
-    patternOptionalSpecialCharSet = regex.compile("\\[\\^a\\-zA\\-Z0\\-9\\\\s\\]\\?")
-    patternSpecialCharSet = regex.compile("\\[\\^a\\-zA\\-Z0\\-9\\\\s\\]")
+    patternOptionalRangeSet = regex.compile("\\[\\\\?(.)-\\\\?(.)\\]\\?")
+    patternRangeSet = regex.compile("\\[\\\\?(.)-\\\\?(.)\\]")
     patternOptionalWhitespace = regex.compile("\\(\\[\\\\s\\]\\+\\)\\?")
     patternWhitespace = regex.compile("\\(\\[\\\\s\\]\\+\\)")
     patternOptionalWildcard = regex.compile("\\.\\?")
@@ -63,28 +61,18 @@ def generatePatternString(targetString):
             baseFitness += 1 / (ord(match.group(2)) - ord(match.group(1)) + 1)
             match = patternRangeSet.search(patternStringTrimmed)
 
-        # Special character sets (TODO: fix this hack)
-        match = patternOptionalSpecialCharSet.search(patternStringTrimmed)
-        while match is not None:
-            patternStringTrimmed = patternStringTrimmed[: match.span(0)[0]] + patternStringTrimmed[match.span(0)[1] :]
-            baseFitness -= 1 / len(string.punctuation)
-            match = patternOptionalSpecialCharSet.search(patternStringTrimmed)
-        match = patternSpecialCharSet.search(patternStringTrimmed)
-        while match is not None:
-            patternStringTrimmed = patternStringTrimmed[: match.span(0)[0]] + patternStringTrimmed[match.span(0)[1] :]
-            baseFitness += 1 / len(string.punctuation)
-            match = patternSpecialCharSet.search(patternStringTrimmed)
-
-        # Whitespace
+        # Optional whitespace
         match = patternOptionalWhitespace.search(patternStringTrimmed)
         while match is not None:
             patternStringTrimmed = patternStringTrimmed[: match.span(0)[0]] + patternStringTrimmed[match.span(0)[1] :]
-            baseFitness -= 1 / len(string.punctuation)
+            baseFitness -= 1 / len(string.whitespace)
             match = patternOptionalWhitespace.search(patternStringTrimmed)
+
+        # Mandatory whitespace
         match = patternWhitespace.search(patternStringTrimmed)
         while match is not None:
             patternStringTrimmed = patternStringTrimmed[: match.span(0)[0]] + patternStringTrimmed[match.span(0)[1] :]
-            baseFitness += 1 / len(string.punctuation)
+            baseFitness += 1 / len(string.whitespace)
             match = patternWhitespace.search(patternStringTrimmed)
 
         # Optional wildcards
@@ -129,7 +117,7 @@ def generatePatternString(targetString):
     pset.addPrimitive(primitives.concatenate, (str, str), str)
     pset.addPrimitive(primitives.optional, (str,), str)
     pset.addPrimitive(primitives.range, (int, int), str)
-    pset.addPrimitive(primitives.negatedRange, (int, int), str)
+    # pset.addPrimitive(primitives.negatedRange, (int, int), str)
     pset.addEphemeralConstant("randomPrintableAsciiCode", primitives.randomPrintableAsciiCode, int)
     pset.addEphemeralConstant("whitespace", primitives.whitespace, str)
     pset.addEphemeralConstant("wildcard", primitives.wildcard, str)
