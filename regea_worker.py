@@ -27,6 +27,8 @@ fileContents = []
 
 
 def generatePatternString(targetString):
+    patternOptionalNegatedRangeSet = regex.compile("\\[\\^\\\\?(.)-\\\\?(.)\\]\\?")
+    patternNegatedRangeSet = regex.compile("\\[\\^\\\\?(.)-\\\\?(.)\\]")
     patternOptionalRangeSet = regex.compile("\\[\\\\?(.)-\\\\?(.)\\]\\?")
     patternRangeSet = regex.compile("\\[\\\\?(.)-\\\\?(.)\\]")
     patternOptionalWhitespace = regex.compile("\\(\\[\\\\s\\]\\+\\)\\?")
@@ -46,6 +48,20 @@ def generatePatternString(targetString):
 
         baseFitness = 0
         patternStringTrimmed = patternString
+
+        # Optional negated range sets
+        match = patternOptionalNegatedRangeSet.search(patternStringTrimmed)
+        while match is not None:
+            patternStringTrimmed = patternStringTrimmed[: match.span(0)[0]] + patternStringTrimmed[match.span(0)[1] :]
+            baseFitness -= 1 / (len(string.printable) - (ord(match.group(2)) - ord(match.group(1)) + 1))
+            match = patternOptionalNegatedRangeSet.search(patternStringTrimmed)
+
+        # Mandatory negated range sets
+        match = patternNegatedRangeSet.search(patternStringTrimmed)
+        while match is not None:
+            patternStringTrimmed = patternStringTrimmed[: match.span(0)[0]] + patternStringTrimmed[match.span(0)[1] :]
+            baseFitness += 1 / (len(string.printable) - (ord(match.group(2)) - ord(match.group(1)) + 1))
+            match = patternNegatedRangeSet.search(patternStringTrimmed)
 
         # Optional range sets
         match = patternOptionalRangeSet.search(patternStringTrimmed)
@@ -117,7 +133,7 @@ def generatePatternString(targetString):
     pset.addPrimitive(primitives.concatenate, (str, str), str)
     pset.addPrimitive(primitives.optional, (str,), str)
     pset.addPrimitive(primitives.range, (int, int), str)
-    # pset.addPrimitive(primitives.negatedRange, (int, int), str)
+    pset.addPrimitive(primitives.negatedRange, (int, int), str)
     pset.addEphemeralConstant("randomPrintableAsciiCode", primitives.randomPrintableAsciiCode, int)
     pset.addEphemeralConstant("whitespace", primitives.whitespace, str)
     pset.addEphemeralConstant("wildcard", primitives.wildcard, str)
