@@ -20,6 +20,10 @@ outputFilenamePatterns = "regea.report.patterns"
 outputFilenameFrequencies = "regea.report.frequencies"
 
 
+def argmin(iterable):
+    return min(range(len(iterable)), key=iterable.__getitem__)
+
+
 def main(argv):
     timeStart = time.time()
 
@@ -52,7 +56,7 @@ def main(argv):
         if linesCurrent.count(linesCurrent[0]) == len(linesCurrent):
             patternString = f"^{regex.escape(linesCurrent[0])}$"
             patterns[patternString] = regex.compile(patternString, regex.MULTILINE)
-        iLineMin = min(range(len(linesCurrent)), key=linesCurrent.__getitem__)
+        iLineMin = argmin(linesCurrent)
         indices[iLineMin] += 1
         try:
             linesCurrent[iLineMin] = fileContentsSorted[iLineMin][indices[iLineMin]]
