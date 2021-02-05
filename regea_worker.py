@@ -37,7 +37,7 @@ def generatePatternString(targetString):
     patternWildcard = regex.compile("\\.")
     patternOptionalChar = regex.compile(".\\?")
 
-    def evaluatePatternString(patternString):
+    def evaluatePatternString(patternString):  # TODO: update fitness calculation
         if not patternString:
             return 0.0
 
@@ -125,17 +125,13 @@ def generatePatternString(targetString):
         return (fitness,)
 
     pset = deap.gp.PrimitiveSetTyped("main", [], str)
+    pset.addPrimitive(primitives.identity, (int,), int)
     pset.addPrimitive(primitives.concatenate, (str, str), str)
     pset.addPrimitive(primitives.optional, (str,), str)
-    pset.addEphemeralConstant("lowercaseLetter", primitives.lowercaseLetter, str)
-    pset.addEphemeralConstant("anyLowercaseLetter", primitives.anyLowercaseLetter, str)
-    pset.addEphemeralConstant("uppercaseLetter", primitives.uppercaseLetter, str)
-    pset.addEphemeralConstant("anyUppercaseLetter", primitives.anyUppercaseLetter, str)
-    pset.addEphemeralConstant("digit", primitives.digit, str)
-    pset.addEphemeralConstant("anyDigit", primitives.anyDigit, str)
+    pset.addPrimitive(primitives.range, (int, int), str)
+    pset.addPrimitive(primitives.negatedRange, (int, int), str)
+    pset.addEphemeralConstant("randomPrintableAsciiCode", primitives.randomPrintableAsciiCode, int)
     pset.addEphemeralConstant("whitespace", primitives.whitespace, str)
-    pset.addEphemeralConstant("specialCharacter", primitives.specialCharacter, str)
-    pset.addEphemeralConstant("anySpecialCharacter", primitives.anySpecialCharacter, str)
     pset.addEphemeralConstant("wildcard", primitives.wildcard, str)
 
     deap.creator.create("FitnessMax", deap.base.Fitness, weights=(1.0,))
