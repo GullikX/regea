@@ -135,8 +135,8 @@ def main(argv):
             print(f"[{time.time() - timeStart:.3f}] Timed out waiting for {nWorkersActive} worker process(es)")
             pass
 
-    # Calculate frequency means and variances
-    print(f"[{time.time() - timeStart:.3f}] Calculating frequency means and variances...")
+    # Calculate frequency means and standard deviations
+    print(f"[{time.time() - timeStart:.3f}] Calculating frequency means and standard deviations...")
     frequencies = np.zeros((len(fileContents), len(patterns)))
     patternList = list(patterns.values())
     for iFile in range(len(fileContents)):
@@ -144,7 +144,7 @@ def main(argv):
         for iPattern in range(len(patternList)):
             frequencies[iFile][iPattern] += len(patternList[iPattern].findall(content))
     frequencyMeans = list(frequencies.mean(axis=0))
-    frequencyVariances = list(frequencies.var(axis=0))
+    frequencyStddevs = list(frequencies.std(axis=0))
 
     # Write results to disk
     print(f"[{time.time() - timeStart:.3f}] Writing results to disk...")
@@ -152,7 +152,7 @@ def main(argv):
         with open(outputFilenameFrequencies, "w") as outputFileFrequencies:
             for iPattern in range(len(patternList)):
                 outputFilePatterns.write(f"{patternList[iPattern].pattern}\n")
-                outputFileFrequencies.write(f"{frequencyMeans[iPattern]} {frequencyVariances[iPattern]}\n")
+                outputFileFrequencies.write(f"{frequencyMeans[iPattern]} {frequencyStddevs[iPattern]}\n")
 
     # Remove socket
     try:
