@@ -12,7 +12,7 @@ import time
 socketAddress = "/tmp/regea.socket"
 workerExecutable = "./regea_worker.py"
 nWorkersMax = os.cpu_count()
-socketBufferSize = 1024
+socketBufferSize = 1024  # Bytes
 workerTimeout = 3600  # Seconds
 verbose = True
 
