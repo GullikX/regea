@@ -133,7 +133,6 @@ def main(argv):
                 nWorkersActive -= 1
         except socket.timeout:
             print(f"[{time.time() - timeStart:.3f}] Timed out waiting for {nWorkersActive} worker process(es)")
-            pass
 
     # Calculate frequency means and standard deviations
     print(f"[{time.time() - timeStart:.3f}] Calculating frequency means and standard deviations...")
