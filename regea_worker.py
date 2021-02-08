@@ -19,6 +19,7 @@ populationSize = 10000
 nGenerations = 25
 crossoverProbability = 0.10
 mutationProbability = 0.05
+regexLengthFitnessModifier = 4
 verbose = False
 socketAddress = "/tmp/regea.socket"
 
@@ -47,6 +48,7 @@ def generatePatternString(targetString):
             return 0.0
 
         baseFitness = 0
+        nRegexSegments = 0
         patternStringTrimmed = patternString
 
         # Optional negated range sets
@@ -61,6 +63,7 @@ def generatePatternString(targetString):
         while match is not None:
             patternStringTrimmed = patternStringTrimmed[: match.span(0)[0]] + patternStringTrimmed[match.span(0)[1] :]
             baseFitness += 1 / (len(string.printable) - (ord(match.group(2)) - ord(match.group(1)) + 1))
+            nRegexSegments += 1
             match = patternNegatedRangeSet.search(patternStringTrimmed)
 
         # Optional range sets
@@ -75,6 +78,7 @@ def generatePatternString(targetString):
         while match is not None:
             patternStringTrimmed = patternStringTrimmed[: match.span(0)[0]] + patternStringTrimmed[match.span(0)[1] :]
             baseFitness += 1 / (ord(match.group(2)) - ord(match.group(1)) + 1)
+            nRegexSegments += 1
             match = patternRangeSet.search(patternStringTrimmed)
 
         # Optional whitespace
@@ -89,6 +93,7 @@ def generatePatternString(targetString):
         while match is not None:
             patternStringTrimmed = patternStringTrimmed[: match.span(0)[0]] + patternStringTrimmed[match.span(0)[1] :]
             baseFitness += 1 / len(string.whitespace)
+            nRegexSegments += 1
             match = patternWhitespace.search(patternStringTrimmed)
 
         # Optional wildcards
@@ -115,7 +120,9 @@ def generatePatternString(targetString):
         patternStringTrimmed = patternStringTrimmed.replace("\\", "")  # De-escape stuff
 
         baseFitness += len(patternStringTrimmed)  # Should only be literal characters left
+        nRegexSegments += len(patternStringTrimmed)
 
+        baseFitness *= nRegexSegments ** regexLengthFitnessModifier
         fitness = 0.0
         for iFile in range(len(fileContents)):
             if pattern.search(fileContents[iFile]) is not None:
