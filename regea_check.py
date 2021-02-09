@@ -67,16 +67,10 @@ def main(argv):
     for iPattern in range(len(patternStrings)):
         pattern = regex.compile(patternStrings[iPattern], regex.MULTILINE)
 
-        errorFileMatches = set()
-        for iLine in range(len(errorFileContents)):
-            if pattern.match(errorFileContents[iLine]) is not None:
-                errorFileMatches.add(errorFileContents[iLine])
-
+        errorFileMatches = set(pattern.findall("\n".join(errorFileContents)))
         referenceFileMatches = set()
         for iFile in range(len(referenceFileContents)):
-            for iLine in range(len(referenceFileContents[iFile])):
-                if pattern.match(referenceFileContents[iFile][iLine]) is not None:
-                    referenceFileMatches.add(referenceFileContents[iFile][iLine])
+            referenceFileMatches.update(pattern.findall("\n".join(referenceFileContents[iFile])))
 
         if frequenciesBelowReference[iPattern] or frequenciesAboveReference[iPattern]:
             for line in errorFileMatches.difference(referenceFileMatches):
