@@ -60,28 +60,46 @@ def main(argv):
             frequenciesBelowReference[iPattern] = True
 
     # Generate diff
-    diffFileContents = set()
+    diffFileContents = {}
+
+    diffFileContents[None] = set()
     for iLine in range(len(errorFileContents)):
         if not linesMatched[iLine]:
-            diffFileContents.add(f"> {errorFileContents[iLine]}")
+            diffFileContents[None].add(f"> {errorFileContents[iLine]}")
+
     for iPattern in range(len(patternStrings)):
         pattern = regex.compile(patternStrings[iPattern], regex.MULTILINE)
 
-        errorFileMatches = set(pattern.findall("\n".join(errorFileContents)))
+        errorFileMatches = set()
+        for match in pattern.finditer("\n".join(errorFileContents)):
+            errorFileMatches.add(match.string[match.span()[0] : match.span()[1]])
+
         referenceFileMatches = set()
         for iFile in range(len(referenceFileContents)):
-            referenceFileMatches.update(pattern.findall("\n".join(referenceFileContents[iFile])))
+            for match in pattern.finditer("\n".join(referenceFileContents[iFile])):
+                referenceFileMatches.add(match.string[match.span()[0] : match.span()[1]])
 
+        diffFileContents[patternStrings[iPattern]] = set()
         if frequenciesBelowReference[iPattern] or frequenciesAboveReference[iPattern]:
-            for line in errorFileMatches.difference(referenceFileMatches):
-                diffFileContents.add(f"> {line}")
-            for line in referenceFileMatches.difference(errorFileMatches):
-                diffFileContents.add(f"< {line}")
+            for line in errorFileMatches:
+                diffFileContents[patternStrings[iPattern]].add(f"> {line}")
+            for line in referenceFileMatches:
+                diffFileContents[patternStrings[iPattern]].add(f"< {line}")
+        if not diffFileContents[patternStrings[iPattern]]:
+            diffFileContents.pop(patternStrings[iPattern])
 
     # Write results to disk
     with open(f"{errorFile}.diff", "w") as diffFile:
-        diffFile.write("\n".join(sorted(list(diffFileContents))))
-        diffFile.write("\n")
+        if diffFileContents[None]:
+            diffFile.write("# Unmatched lines\n")
+            diffFile.write("\n".join(sorted(list(diffFileContents[None]))))
+            diffFile.write("\n\n")
+        for patternString in diffFileContents:
+            if patternString is None or not diffFileContents[patternString]:
+                continue
+            diffFile.write(f"# {patternString}\n")
+            diffFile.write("\n".join(sorted(list(diffFileContents[patternString]))))
+            diffFile.write("\n\n")
 
 
 if __name__ == "__main__":
