@@ -25,7 +25,7 @@ def range(left, right):
 def negatedRange(left, right):
     # if left == right:
     #    return f"[^{regex.escape(chr(left))}]"
-    return f"[^{regex.escape(chr(min(left, right)))}-{regex.escape(chr(max(left, right)))}]"
+    return f"[^{regex.escape(chr(min(left, right)))}-{regex.escape(chr(max(left, right)))}\\n\\r]"
 
 
 def randomPrintableAsciiCode():

@@ -28,8 +28,8 @@ fileContents = []
 
 
 def generatePatternString(targetString):
-    patternOptionalNegatedRangeSet = regex.compile("\\[\\^\\\\?(.)-\\\\?(.)\\]\\?")
-    patternNegatedRangeSet = regex.compile("\\[\\^\\\\?(.)-\\\\?(.)\\]")
+    patternOptionalNegatedRangeSet = regex.compile("\\[\\^\\\\?(.)-\\\\?(.)\\\\n\\\\r\\]\\?")
+    patternNegatedRangeSet = regex.compile("\\[\\^\\\\?(.)-\\\\?(.)\\\\n\\\\r\\]")
     patternOptionalRangeSet = regex.compile("\\[\\\\?(.)-\\\\?(.)\\]\\?")
     patternRangeSet = regex.compile("\\[\\\\?(.)-\\\\?(.)\\]")
     patternOptionalWhitespace = regex.compile("\\(\\[\\\\s\\]\\+\\)\\?")
