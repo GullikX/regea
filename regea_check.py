@@ -45,8 +45,7 @@ def main(argv):
 
     # Check for discrepancies
     linesMatched = [False] * len(errorFileContents)
-    frequenciesAboveReference = [False] * len(patternStrings)
-    frequenciesBelowReference = [False] * len(patternStrings)
+    frequencyDeviations = [False] * len(patternStrings)
     for iPattern in range(len(patternStrings)):
         pattern = regex.compile(patternStrings[iPattern])
         frequency = 0
@@ -54,10 +53,11 @@ def main(argv):
             if pattern.search(errorFileContents[iLine]) is not None:
                 frequency += 1
                 linesMatched[iLine] = True
-        if frequency > frequencyMeans[iPattern] + threshold * frequencyStddevs[iPattern]:
-            frequenciesAboveReference[iPattern] = True
-        elif frequency < frequencyMeans[iPattern] - threshold * frequencyStddevs[iPattern]:
-            frequenciesBelowReference[iPattern] = True
+        if (
+            frequency > frequencyMeans[iPattern] + threshold * frequencyStddevs[iPattern]
+            or frequency < frequencyMeans[iPattern] - threshold * frequencyStddevs[iPattern]
+        ):
+            frequencyDeviations[iPattern] = True
 
     # Generate diff
     diffFileContents = {}
@@ -65,28 +65,35 @@ def main(argv):
     diffFileContents[None] = set()
     for iLine in range(len(errorFileContents)):
         if not linesMatched[iLine]:
-            diffFileContents[None].add(f"> {errorFileContents[iLine]}")
+            nOccurances = errorFileContents.count(errorFileContents[iLine])
+            diffFileContents[None].add(f"> {errorFileContents[iLine]} (x{nOccurances:.2f})")
 
     for iPattern in range(len(patternStrings)):
+        if not frequencyDeviations[iPattern]:
+            continue
+
         pattern = regex.compile(patternStrings[iPattern], regex.MULTILINE)
+        occuranceMap = {}
 
-        errorFileMatches = set()
         for match in pattern.finditer("\n".join(errorFileContents)):
-            errorFileMatches.add(match.string[match.span()[0] : match.span()[1]])
+            matchedString = match.string[match.span()[0] : match.span()[1]]
+            if matchedString not in occuranceMap:
+                occuranceMap[matchedString] = 0.0
+            occuranceMap[matchedString] += 1.0
 
-        referenceFileMatches = set()
         for iFile in range(len(referenceFileContents)):
             for match in pattern.finditer("\n".join(referenceFileContents[iFile])):
-                referenceFileMatches.add(match.string[match.span()[0] : match.span()[1]])
+                matchedString = match.string[match.span()[0] : match.span()[1]]
+                if matchedString not in occuranceMap:
+                    occuranceMap[matchedString] = 0.0
+                occuranceMap[matchedString] -= 1.0 / len(referenceFiles)
 
         diffFileContents[patternStrings[iPattern]] = set()
-        if frequenciesBelowReference[iPattern] or frequenciesAboveReference[iPattern]:
-            for line in errorFileMatches:
-                diffFileContents[patternStrings[iPattern]].add(f"> {line}")
-            for line in referenceFileMatches:
-                diffFileContents[patternStrings[iPattern]].add(f"< {line}")
-        if not diffFileContents[patternStrings[iPattern]]:
-            diffFileContents.pop(patternStrings[iPattern])
+        for line in occuranceMap:
+            if occuranceMap[line] > 0:
+                diffFileContents[patternStrings[iPattern]].add(f"> {line} (x{occuranceMap[line]:.2f})")
+            elif occuranceMap[line] < 0:
+                diffFileContents[patternStrings[iPattern]].add(f"< {line} (x{-occuranceMap[line]:.2f})")
 
     # Write results to disk
     with open(f"{errorFile}.diff", "w") as diffFile:
