@@ -39,25 +39,24 @@ def main(argv):
 
     frequencyMeans = [None] * len(patternFrequencies)
     frequencyStddevs = [None] * len(patternFrequencies)
+    frequencyMeansMap = {}
+    frequencyStddevsMap = {}
     for iPattern in range(len(patternFrequencies)):
         frequencyMeans[iPattern] = float(patternFrequencies[iPattern].split()[0])
         frequencyStddevs[iPattern] = float(patternFrequencies[iPattern].split()[1])
+        frequencyMeansMap[patternStrings[iPattern]] = frequencyMeans[iPattern]
+        frequencyStddevsMap[patternStrings[iPattern]] = frequencyStddevs[iPattern]
 
     # Check for discrepancies
     linesMatched = [False] * len(errorFileContents)
-    frequencyDeviations = [False] * len(patternStrings)
+    errorFrequencies = {}
     for iPattern in range(len(patternStrings)):
         pattern = regex.compile(patternStrings[iPattern])
-        frequency = 0
+        errorFrequencies[patternStrings[iPattern]] = 0
         for iLine in range(len(errorFileContents)):
             if pattern.search(errorFileContents[iLine]) is not None:
-                frequency += 1
+                errorFrequencies[patternStrings[iPattern]] += 1
                 linesMatched[iLine] = True
-        if (
-            frequency > frequencyMeans[iPattern] + threshold * frequencyStddevs[iPattern]
-            or frequency < frequencyMeans[iPattern] - threshold * frequencyStddevs[iPattern]
-        ):
-            frequencyDeviations[iPattern] = True
 
     # Generate diff
     diffFileContents = {}
@@ -66,10 +65,15 @@ def main(argv):
     for iLine in range(len(errorFileContents)):
         if not linesMatched[iLine]:
             nOccurances = errorFileContents.count(errorFileContents[iLine])
-            diffFileContents[None].add(f"> {errorFileContents[iLine]} (x{nOccurances:.2f})")
+            diffFileContents[None].add(f"> {errorFileContents[iLine]} (x{nOccurances:.3f})")
 
     for iPattern in range(len(patternStrings)):
-        if not frequencyDeviations[iPattern]:
+        if not (
+            errorFrequencies[patternStrings[iPattern]]
+            > frequencyMeans[iPattern] + threshold * frequencyStddevs[iPattern]
+            or errorFrequencies[patternStrings[iPattern]]
+            < frequencyMeans[iPattern] - threshold * frequencyStddevs[iPattern]
+        ):
             continue
 
         pattern = regex.compile(patternStrings[iPattern], regex.MULTILINE)
@@ -91,9 +95,9 @@ def main(argv):
         diffFileContents[patternStrings[iPattern]] = set()
         for line in occuranceMap:
             if occuranceMap[line] > 0:
-                diffFileContents[patternStrings[iPattern]].add(f"> {line} (x{occuranceMap[line]:.2f})")
+                diffFileContents[patternStrings[iPattern]].add(f"> {line} (x{occuranceMap[line]:.3f})")
             elif occuranceMap[line] < 0:
-                diffFileContents[patternStrings[iPattern]].add(f"< {line} (x{-occuranceMap[line]:.2f})")
+                diffFileContents[patternStrings[iPattern]].add(f"< {line} (x{-occuranceMap[line]:.3f})")
 
     # Write results to disk
     with open(f"{errorFile}.diff", "w") as diffFile:
@@ -104,7 +108,9 @@ def main(argv):
         for patternString in diffFileContents:
             if patternString is None or not diffFileContents[patternString]:
                 continue
-            diffFile.write(f"# {patternString}\n")
+            diffFile.write(
+                f"# {patternString}, (mean: {frequencyMeansMap[patternString]:.3f}, stddev: {frequencyStddevsMap[patternString]:.3f}, errorfreq: {errorFrequencies[patternString]})\n"
+            )
             diffFile.write("\n".join(sorted(list(diffFileContents[patternString]))))
             diffFile.write("\n\n")
 
