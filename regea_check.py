@@ -8,6 +8,13 @@ inputFilenameFrequencies = "regea.report.frequencies"
 threshold = 1.0  # Number of standard deviations
 
 
+def countStddevs(mean, stddev, value):
+    try:
+        return abs(value - mean) / stddev
+    except ZeroDivisionError:
+        return float("inf")
+
+
 def main(argv):
     if len(sys.argv) < 3:
         print(f"usage: {sys.argv[0]} ERRORFILE REFERENCEFILE...")
@@ -59,13 +66,13 @@ def main(argv):
                 linesMatched[iLine] = True
 
     # Generate diff
+    unmatchedLines = set()
     diffFileContents = {}
 
-    diffFileContents[None] = set()
     for iLine in range(len(errorFileContents)):
         if not linesMatched[iLine]:
             nOccurances = errorFileContents.count(errorFileContents[iLine])
-            diffFileContents[None].add(f"> {errorFileContents[iLine]} (x{nOccurances:.3f})")
+            unmatchedLines.add(f"> {errorFileContents[iLine]} (x{nOccurances:.3f})")
 
     for iPattern in range(len(patternStrings)):
         if not (
@@ -99,17 +106,27 @@ def main(argv):
             elif occuranceMap[line] < 0:
                 diffFileContents[patternStrings[iPattern]].add(f"< {line} (x{-occuranceMap[line]:.3f})")
 
+    diffFileContentsSorted = dict(
+        sorted(
+            diffFileContents.items(),
+            key=lambda item: countStddevs(
+                frequencyMeansMap[item[0]], frequencyStddevsMap[item[0]], errorFrequencies[item[0]]
+            ),
+            reverse=True,
+        )
+    )
+
     # Write results to disk
     with open(f"{errorFile}.diff", "w") as diffFile:
-        if diffFileContents[None]:
+        if unmatchedLines:
             diffFile.write("# Unmatched lines\n")
-            diffFile.write("\n".join(sorted(list(diffFileContents[None]))))
+            diffFile.write("\n".join(sorted(list(unmatchedLines))))
             diffFile.write("\n\n")
-        for patternString in diffFileContents:
-            if patternString is None or not diffFileContents[patternString]:
+        for patternString in diffFileContentsSorted:
+            if not diffFileContents[patternString]:
                 continue
             diffFile.write(
-                f"# {patternString}, (mean: {frequencyMeansMap[patternString]:.3f}, stddev: {frequencyStddevsMap[patternString]:.3f}, errorfreq: {errorFrequencies[patternString]})\n"
+                f"# {patternString}, (mean: {frequencyMeansMap[patternString]:.3f}, stddev: {frequencyStddevsMap[patternString]:.3f}, errorfreq: {errorFrequencies[patternString]}, stddevs from mean: {countStddevs(frequencyMeansMap[patternString], frequencyStddevsMap[patternString], errorFrequencies[patternString]):.3f})\n"
             )
             diffFile.write("\n".join(sorted(list(diffFileContents[patternString]))))
             diffFile.write("\n\n")
