@@ -67,12 +67,13 @@ def main(argv):
 
     # Generate diff
     unmatchedLines = set()
+    nUnmatchedLineOccurances = {}
     diffFileContents = {}
 
     for iLine in range(len(errorFileContents)):
         if not linesMatched[iLine]:
-            nOccurances = errorFileContents.count(errorFileContents[iLine])
-            unmatchedLines.add(f"> {errorFileContents[iLine]} (x{nOccurances:.3f})")
+            nUnmatchedLineOccurances[errorFileContents[iLine]] = errorFileContents.count(errorFileContents[iLine])
+            unmatchedLines.add(errorFileContents[iLine])
 
     for iPattern in range(len(patternStrings)):
         if not (
@@ -119,8 +120,12 @@ def main(argv):
     # Write results to disk
     with open(f"{errorFile}.diff", "w") as diffFile:
         if unmatchedLines:
+            unmatchedLinesSorted = sorted(
+                list(unmatchedLines), key=lambda item: nUnmatchedLineOccurances[item], reverse=True
+            )
             diffFile.write("# Unmatched lines\n")
-            diffFile.write("\n".join(sorted(list(unmatchedLines))))
+            for line in unmatchedLinesSorted:
+                diffFile.write(f"> {line} (x{nUnmatchedLineOccurances[line]})\n")
             diffFile.write("\n\n")
         for patternString in diffFileContentsSorted:
             if not diffFileContents[patternString]:
