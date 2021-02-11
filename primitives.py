@@ -32,8 +32,12 @@ def randomPrintableAsciiCode():
     return random.randint(32, 126)
 
 
-def whitespace():
-    return "([\s]+)"
+def randomCharacter():
+    return regex.escape(chr(random.randint(32, 126)))
+
+
+# def whitespace():
+#    return "([\s]+)"
 
 
 def wildcard():

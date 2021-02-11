@@ -82,19 +82,19 @@ def generatePatternString(targetString):
             match = patternRangeSet.search(patternStringTrimmed)
 
         # Optional whitespace
-        match = patternOptionalWhitespace.search(patternStringTrimmed)
-        while match is not None:
-            patternStringTrimmed = patternStringTrimmed[: match.span(0)[0]] + patternStringTrimmed[match.span(0)[1] :]
-            baseFitness -= 1 / len(string.whitespace)
-            match = patternOptionalWhitespace.search(patternStringTrimmed)
+        # match = patternOptionalWhitespace.search(patternStringTrimmed)
+        # while match is not None:
+        #    patternStringTrimmed = patternStringTrimmed[: match.span(0)[0]] + patternStringTrimmed[match.span(0)[1] :]
+        #    baseFitness -= 1 / len(string.whitespace)
+        #    match = patternOptionalWhitespace.search(patternStringTrimmed)
 
         # Mandatory whitespace
-        match = patternWhitespace.search(patternStringTrimmed)
-        while match is not None:
-            patternStringTrimmed = patternStringTrimmed[: match.span(0)[0]] + patternStringTrimmed[match.span(0)[1] :]
-            baseFitness += 1 / len(string.whitespace)
-            nRegexSegments += 1
-            match = patternWhitespace.search(patternStringTrimmed)
+        # match = patternWhitespace.search(patternStringTrimmed)
+        # while match is not None:
+        #    patternStringTrimmed = patternStringTrimmed[: match.span(0)[0]] + patternStringTrimmed[match.span(0)[1] :]
+        #    baseFitness += 1 / len(string.whitespace)
+        #    nRegexSegments += 1
+        #    match = patternWhitespace.search(patternStringTrimmed)
 
         # Optional wildcards
         match = patternOptionalWildcard.search(patternStringTrimmed)
@@ -142,7 +142,8 @@ def generatePatternString(targetString):
     pset.addPrimitive(primitives.range, (int, int), str)
     pset.addPrimitive(primitives.negatedRange, (int, int), str)
     pset.addEphemeralConstant("randomPrintableAsciiCode", primitives.randomPrintableAsciiCode, int)
-    pset.addEphemeralConstant("whitespace", primitives.whitespace, str)
+    pset.addEphemeralConstant("randomCharacter", primitives.randomCharacter, str)
+    # pset.addEphemeralConstant("whitespace", primitives.whitespace, str)
     pset.addEphemeralConstant("wildcard", primitives.wildcard, str)
 
     deap.creator.create("FitnessMax", deap.base.Fitness, weights=(1.0,))
