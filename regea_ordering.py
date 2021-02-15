@@ -123,7 +123,8 @@ def main(argv):
 
     errorFileContentsJoined = "\n".join(errorFileContents)
     rules = set()
-    while True:
+    nRuleViolations = {}
+    for i in range(int(1e6)):
         rule = Rule(patternStrings)
         for iFile in range(len(referenceFiles)):
             if not rule.evaluate(referencePatternIndices[iFile]):
@@ -136,10 +137,17 @@ def main(argv):
                     and rule.iPatternOther in errorPatternIndices
                     and not rule.evaluate(errorPatternIndices)
                 ):
-                    print(
-                        f"{rule}\n{patterns[rule.iPattern].findall(errorFileContentsJoined)}\n{patterns[rule.iPatternOther].findall(errorFileContentsJoined)}\n"
-                    )
-                    print(len(rules))
+                    if patternStrings[rule.iPattern] not in nRuleViolations:
+                        nRuleViolations[patternStrings[rule.iPattern]] = 0
+                    nRuleViolations[patternStrings[rule.iPattern]] += 1
+                    if patternStrings[rule.iPatternOther] not in nRuleViolations:
+                        nRuleViolations[patternStrings[rule.iPatternOther]] = 0
+                    nRuleViolations[patternStrings[rule.iPatternOther]] += 1
+
+    for patternString in list(dict(sorted(nRuleViolations.items(), key=lambda item: item[1], reverse=True)))[:10]:
+        match = regex.compile(patternString, regex.MULTILINE).search(errorFileContentsJoined)
+        print(f"'{match.string[match.span()[0] : match.span()[1]]}': {nRuleViolations[patternString]}")
+
     return 0
 
 
