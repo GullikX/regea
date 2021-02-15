@@ -6,6 +6,7 @@ import regex
 import sys
 
 inputFilenamePatterns = "regea.report.patterns"
+nPatternsToShow = 10
 
 
 class RuleType(enum.IntEnum):
@@ -121,9 +122,10 @@ def main(argv):
                     break
         assert not len(np.where(referencePatternIndices[iFile] == -1)[0])
 
-    errorFileContentsJoined = "\n".join(errorFileContents)
     rules = set()
-    nRuleViolations = {}
+    violatedRulesPerPattern = {}
+    nRuleViolations = 0
+    nRuleViolationsPerPattern = {}
     for i in range(int(1e6)):
         rule = Rule(patterns)
         for iFile in range(len(referenceFiles)):
@@ -137,16 +139,38 @@ def main(argv):
                     and rule.iPatternOther in errorPatternIndices
                     and not rule.evaluate(errorPatternIndices)
                 ):
-                    if rule.pattern not in nRuleViolations:
-                        nRuleViolations[rule.pattern] = 0
-                    nRuleViolations[rule.pattern] += 1
-                    if rule.patternOther not in nRuleViolations:
-                        nRuleViolations[rule.patternOther] = 0
-                    nRuleViolations[rule.patternOther] += 1
+                    nRuleViolations += 1
+                    if rule.pattern not in nRuleViolationsPerPattern:
+                        nRuleViolationsPerPattern[rule.pattern] = 0
+                    nRuleViolationsPerPattern[rule.pattern] += 1
+                    if rule.patternOther not in nRuleViolationsPerPattern:
+                        nRuleViolationsPerPattern[rule.patternOther] = 0
+                    nRuleViolationsPerPattern[rule.patternOther] += 1
+                    if rule.pattern not in violatedRulesPerPattern:
+                        violatedRulesPerPattern[rule.pattern] = set()
+                    violatedRulesPerPattern[rule.pattern].add(rule)
+                    if rule.patternOther not in violatedRulesPerPattern:
+                        violatedRulesPerPattern[rule.patternOther] = set()
+                    violatedRulesPerPattern[rule.patternOther].add(rule)
 
-    for pattern in list(dict(sorted(nRuleViolations.items(), key=lambda item: item[1], reverse=True)))[:10]:
+    errorFileContentsJoined = "\n".join(errorFileContents)
+    for pattern in list(dict(sorted(nRuleViolationsPerPattern.items(), key=lambda item: item[1], reverse=True)))[
+        :nPatternsToShow
+    ]:
         match = pattern.search(errorFileContentsJoined)
-        print(f"'{match.string[match.span()[0] : match.span()[1]]}': {nRuleViolations[pattern]}")
+        print(
+            f"'{match.string[match.span()[0] : match.span()[1]]}': {nRuleViolationsPerPattern[pattern]} violations ({len(violatedRulesPerPattern[pattern])} unique)"
+        )
+        for rule in violatedRulesPerPattern[pattern]:
+            match = rule.pattern.search(errorFileContentsJoined)
+            matchOther = rule.patternOther.search(errorFileContentsJoined)
+            print(
+                f"      Line '{match.string[match.span()[0] : match.span()[1]]}' should always come {RuleType(rule.type).name} '{matchOther.string[matchOther.span()[0] : matchOther.span()[1]]}'"
+            )
+        print("")
+    print(
+        f"Summary: error log violates {nRuleViolations}/{len(rules)} randomly generated rules ({100*nRuleViolations/len(rules):.3f}%)"
+    )
 
     return 0
 
