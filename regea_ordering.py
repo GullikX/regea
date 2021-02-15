@@ -18,11 +18,11 @@ class RuleType(enum.IntEnum):
 
 
 class Rule:
-    def __init__(self, patternStrings):
-        self.iPattern = random.randint(0, len(patternStrings) - 1)
-        self.iPatternOther = random.randint(0, len(patternStrings) - 1)
-        self.patternString = patternStrings[self.iPattern]
-        self.patternStringOther = patternStrings[self.iPatternOther]
+    def __init__(self, patterns):
+        self.iPattern = random.randint(0, len(patterns) - 1)
+        self.iPatternOther = random.randint(0, len(patterns) - 1)
+        self.pattern = patterns[self.iPattern]
+        self.patternOther = patterns[self.iPatternOther]
         self.type = random.randint(0, len(RuleType) - 1)
 
     def evaluate(self, patternIndices):
@@ -61,7 +61,7 @@ class Rule:
         return True
 
     def __str__(self):
-        return f"Pattern '{self.patternString}' always matches {RuleType(self.type).name} pattern '{self.patternStringOther}'"
+        return f"Pattern '{self.pattern.pattern}' always matches {RuleType(self.type).name} pattern '{self.patternOther.pattern}'"
 
     def __hash__(self):
         return hash(str(self))
@@ -125,7 +125,7 @@ def main(argv):
     rules = set()
     nRuleViolations = {}
     for i in range(int(1e6)):
-        rule = Rule(patternStrings)
+        rule = Rule(patterns)
         for iFile in range(len(referenceFiles)):
             if not rule.evaluate(referencePatternIndices[iFile]):
                 break
@@ -137,16 +137,16 @@ def main(argv):
                     and rule.iPatternOther in errorPatternIndices
                     and not rule.evaluate(errorPatternIndices)
                 ):
-                    if patternStrings[rule.iPattern] not in nRuleViolations:
-                        nRuleViolations[patternStrings[rule.iPattern]] = 0
-                    nRuleViolations[patternStrings[rule.iPattern]] += 1
-                    if patternStrings[rule.iPatternOther] not in nRuleViolations:
-                        nRuleViolations[patternStrings[rule.iPatternOther]] = 0
-                    nRuleViolations[patternStrings[rule.iPatternOther]] += 1
+                    if rule.pattern not in nRuleViolations:
+                        nRuleViolations[rule.pattern] = 0
+                    nRuleViolations[rule.pattern] += 1
+                    if rule.patternOther not in nRuleViolations:
+                        nRuleViolations[rule.patternOther] = 0
+                    nRuleViolations[rule.patternOther] += 1
 
-    for patternString in list(dict(sorted(nRuleViolations.items(), key=lambda item: item[1], reverse=True)))[:10]:
-        match = regex.compile(patternString, regex.MULTILINE).search(errorFileContentsJoined)
-        print(f"'{match.string[match.span()[0] : match.span()[1]]}': {nRuleViolations[patternString]}")
+    for pattern in list(dict(sorted(nRuleViolations.items(), key=lambda item: item[1], reverse=True)))[:10]:
+        match = pattern.search(errorFileContentsJoined)
+        print(f"'{match.string[match.span()[0] : match.span()[1]]}': {nRuleViolations[pattern]}")
 
     return 0
 
