@@ -126,7 +126,6 @@ def main(argv):
     rules = set()
     violatedRulesPerPattern = {}
     nRuleViolations = 0
-    nRuleViolationsPerPattern = {}
     for iIteration in range(nIterations):
         rule = Rule(patterns)
         if rule in rules:
@@ -142,12 +141,6 @@ def main(argv):
                 and not rule.evaluate(errorPatternIndices)
             ):
                 nRuleViolations += 1
-                if rule.pattern not in nRuleViolationsPerPattern:
-                    nRuleViolationsPerPattern[rule.pattern] = 0
-                nRuleViolationsPerPattern[rule.pattern] += 1
-                if rule.patternOther not in nRuleViolationsPerPattern:
-                    nRuleViolationsPerPattern[rule.patternOther] = 0
-                nRuleViolationsPerPattern[rule.patternOther] += 1
                 if rule.pattern not in violatedRulesPerPattern:
                     violatedRulesPerPattern[rule.pattern] = set()
                 violatedRulesPerPattern[rule.pattern].add(rule)
@@ -156,21 +149,21 @@ def main(argv):
                 violatedRulesPerPattern[rule.patternOther].add(rule)
 
     errorFileContentsJoined = "\n".join(errorFileContents)
-    for pattern in list(dict(sorted(nRuleViolationsPerPattern.items(), key=lambda item: item[1], reverse=True)))[
+    for pattern in list(dict(sorted(violatedRulesPerPattern.items(), key=lambda item: len(item[1]), reverse=True)))[
         :nPatternsToShow
     ]:
         match = pattern.search(errorFileContentsJoined)
         print(
-            f"'{match.string[match.span()[0] : match.span()[1]]}': {nRuleViolationsPerPattern[pattern]} violations ({len(violatedRulesPerPattern[pattern])} unique)"
+            f"Violated rules containing '{match.string[match.span()[0] : match.span()[1]]}' (x{len(violatedRulesPerPattern[pattern])}):"
         )
         for rule in violatedRulesPerPattern[pattern]:
             match = rule.pattern.search(errorFileContentsJoined)
             matchOther = rule.patternOther.search(errorFileContentsJoined)
             print(
-                f"      Line '{match.string[match.span()[0] : match.span()[1]]}' should always come {RuleType(rule.type).name} '{matchOther.string[matchOther.span()[0] : matchOther.span()[1]]}'"
+                f"    Line '{match.string[match.span()[0] : match.span()[1]]}' should always come {RuleType(rule.type).name} '{matchOther.string[matchOther.span()[0] : matchOther.span()[1]]}'"
             )
         print("")
-    print(f"(+{max(len(nRuleViolationsPerPattern) - nPatternsToShow, 0)} more)")
+    print(f"(+{max(len(violatedRulesPerPattern) - nPatternsToShow, 0)} more)")
     print("")
     print(
         f"Summary: error log violates {nRuleViolations}/{len(rules)} randomly generated rules ({100*nRuleViolations/len(rules):.3f}%)"
