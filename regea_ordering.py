@@ -6,6 +6,7 @@ import regex
 import sys
 
 inputFilenamePatterns = "regea.report.patterns"
+nIterations = int(1e6)
 nPatternsToShow = 10
 
 
@@ -126,7 +127,7 @@ def main(argv):
     violatedRulesPerPattern = {}
     nRuleViolations = 0
     nRuleViolationsPerPattern = {}
-    for i in range(int(1e6)):
+    for iIteration in range(nIterations):
         rule = Rule(patterns)
         if rule in rules:
             continue
