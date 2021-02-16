@@ -168,6 +168,8 @@ def main(argv):
                 f"      Line '{match.string[match.span()[0] : match.span()[1]]}' should always come {RuleType(rule.type).name} '{matchOther.string[matchOther.span()[0] : matchOther.span()[1]]}'"
             )
         print("")
+    print(f"(+{max(len(nRuleViolationsPerPattern) - nPatternsToShow, 0)} more)")
+    print("")
     print(
         f"Summary: error log violates {nRuleViolations}/{len(rules)} randomly generated rules ({100*nRuleViolations/len(rules):.3f}%)"
     )
