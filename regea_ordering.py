@@ -128,30 +128,31 @@ def main(argv):
     nRuleViolationsPerPattern = {}
     for i in range(int(1e6)):
         rule = Rule(patterns)
+        if rule in rules:
+            continue
         for iFile in range(len(referenceFiles)):
             if not rule.evaluate(referencePatternIndices[iFile]):
                 break
         else:
-            if rule not in rules:
-                rules.add(rule)
-                if (
-                    rule.iPattern in errorPatternIndices
-                    and rule.iPatternOther in errorPatternIndices
-                    and not rule.evaluate(errorPatternIndices)
-                ):
-                    nRuleViolations += 1
-                    if rule.pattern not in nRuleViolationsPerPattern:
-                        nRuleViolationsPerPattern[rule.pattern] = 0
-                    nRuleViolationsPerPattern[rule.pattern] += 1
-                    if rule.patternOther not in nRuleViolationsPerPattern:
-                        nRuleViolationsPerPattern[rule.patternOther] = 0
-                    nRuleViolationsPerPattern[rule.patternOther] += 1
-                    if rule.pattern not in violatedRulesPerPattern:
-                        violatedRulesPerPattern[rule.pattern] = set()
-                    violatedRulesPerPattern[rule.pattern].add(rule)
-                    if rule.patternOther not in violatedRulesPerPattern:
-                        violatedRulesPerPattern[rule.patternOther] = set()
-                    violatedRulesPerPattern[rule.patternOther].add(rule)
+            rules.add(rule)
+            if (
+                rule.iPattern in errorPatternIndices
+                and rule.iPatternOther in errorPatternIndices
+                and not rule.evaluate(errorPatternIndices)
+            ):
+                nRuleViolations += 1
+                if rule.pattern not in nRuleViolationsPerPattern:
+                    nRuleViolationsPerPattern[rule.pattern] = 0
+                nRuleViolationsPerPattern[rule.pattern] += 1
+                if rule.patternOther not in nRuleViolationsPerPattern:
+                    nRuleViolationsPerPattern[rule.patternOther] = 0
+                nRuleViolationsPerPattern[rule.patternOther] += 1
+                if rule.pattern not in violatedRulesPerPattern:
+                    violatedRulesPerPattern[rule.pattern] = set()
+                violatedRulesPerPattern[rule.pattern].add(rule)
+                if rule.patternOther not in violatedRulesPerPattern:
+                    violatedRulesPerPattern[rule.patternOther] = set()
+                violatedRulesPerPattern[rule.patternOther].add(rule)
 
     errorFileContentsJoined = "\n".join(errorFileContents)
     for pattern in list(dict(sorted(nRuleViolationsPerPattern.items(), key=lambda item: item[1], reverse=True)))[
