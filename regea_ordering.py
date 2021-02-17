@@ -8,6 +8,7 @@ import sys
 inputFilenamePatterns = "regea.report.patterns"
 nIterations = int(1e6)
 nPatternsToShow = 10
+ruleValidityThreshold = 0.90
 
 
 class RuleType(enum.IntEnum):
@@ -130,9 +131,12 @@ def main(argv):
         rule = Rule(patterns)
         if rule in rules:
             continue
+        ruleValidity = 1.0
         for iFile in range(len(referenceFiles)):
             if not rule.evaluate(referencePatternIndices[iFile]):
-                break
+                ruleValidity -= 1.0 / len(referenceFiles)
+                if ruleValidity < ruleValidityThreshold:
+                    break
         else:
             rules.add(rule)
             if (
