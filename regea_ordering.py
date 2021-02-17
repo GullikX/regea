@@ -126,16 +126,17 @@ def main(argv):
 
     rules = set()
     violatedRulesPerPattern = {}
+    ruleValidities = {}
     nRuleViolations = 0
     for iIteration in range(nIterations):
         rule = Rule(patterns)
         if rule in rules:
             continue
-        ruleValidity = 1.0
+        ruleValidities[rule] = 1.0
         for iFile in range(len(referenceFiles)):
             if not rule.evaluate(referencePatternIndices[iFile]):
-                ruleValidity -= 1.0 / len(referenceFiles)
-                if ruleValidity < ruleValidityThreshold:
+                ruleValidities[rule] -= 1.0 / len(referenceFiles)
+                if ruleValidities[rule] < ruleValidityThreshold:
                     break
         else:
             rules.add(rule)
@@ -156,21 +157,24 @@ def main(argv):
     for pattern in list(dict(sorted(violatedRulesPerPattern.items(), key=lambda item: len(item[1]), reverse=True)))[
         :nPatternsToShow
     ]:
+        ruleValidityAverage = 0.0
+        for rule in violatedRulesPerPattern[pattern]:
+            ruleValidityAverage += ruleValidities[rule] / len(violatedRulesPerPattern[pattern])
         match = pattern.search(errorFileContentsJoined)
         print(
-            f"Violated rules containing '{match.string[match.span()[0] : match.span()[1]]}' (x{len(violatedRulesPerPattern[pattern])}):"
+            f"Violated rules containing '{match.string[match.span()[0] : match.span()[1]]}' (x{len(violatedRulesPerPattern[pattern])}, average validity {100*ruleValidityAverage:.1f}%):"
         )
         for rule in violatedRulesPerPattern[pattern]:
             match = rule.pattern.search(errorFileContentsJoined)
             matchOther = rule.patternOther.search(errorFileContentsJoined)
             print(
-                f"    Line '{match.string[match.span()[0] : match.span()[1]]}' should always come {RuleType(rule.type).name} '{matchOther.string[matchOther.span()[0] : matchOther.span()[1]]}'"
+                f"    Line '{match.string[match.span()[0] : match.span()[1]]}' should always come {RuleType(rule.type).name} '{matchOther.string[matchOther.span()[0] : matchOther.span()[1]]}' (validity {100*ruleValidities[rule]:.1f}%)"
             )
         print("")
     print(f"(+{max(len(violatedRulesPerPattern) - nPatternsToShow, 0)} more)")
     print("")
     print(
-        f"Summary: error log violates {nRuleViolations}/{len(rules)} randomly generated rules ({100*nRuleViolations/len(rules):.3f}%)"
+        f"Summary: error log violates {nRuleViolations}/{len(rules)} randomly generated rules ({100*nRuleViolations/len(rules):.1f}%)"
     )
 
     return 0
