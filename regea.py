@@ -11,7 +11,7 @@ import time
 # Parameters
 socketAddress = "/tmp/regea.socket"
 workerExecutable = "./regea_worker.py"
-nWorkersMax = os.cpu_count()
+nWorkersMax = 1
 socketBufferSize = 1024  # Bytes
 workerTimeout = 3600  # Seconds
 verbose = True
@@ -20,12 +20,21 @@ outputFilenamePatterns = "regea.report.patterns"
 outputFilenameFrequencies = "regea.report.frequencies"
 
 
+def setParameters():
+    global nWorkersMax
+    try:
+        nWorkersMax = int(os.environ["REGEA_MAX_WORKERS"])
+    except KeyError:
+        pass
+
+
 def argmin(iterable):
     return min(range(len(iterable)), key=iterable.__getitem__)
 
 
 def main(argv):
     timeStart = time.time()
+    setParameters()
 
     if len(argv) < 2:
         print(f"usage: {argv[0]} FILE1...")
