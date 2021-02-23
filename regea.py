@@ -43,6 +43,8 @@ nWorkerNodes = size - 1
 fileContentsSplit = []
 fileContentsSplitConcatenated = []
 fileContentsJoined = []
+pset = None
+toolbox = None
 timeStart = time.time()
 
 
@@ -93,6 +95,9 @@ def wildcard():
 
 
 def generatePatternString(targetString):
+    global pset
+    global toolbox
+
     patternOptionalNegatedRangeSet = regex.compile("\\[\\^\\\\?(.)-\\\\?(.)\\\\n\\\\r\\]\\?")
     patternNegatedRangeSet = regex.compile("\\[\\^\\\\?(.)-\\\\?(.)\\\\n\\\\r\\]")
     patternOptionalRangeSet = regex.compile("\\[\\\\?(.)-\\\\?(.)\\]\\?")
@@ -200,34 +205,37 @@ def generatePatternString(targetString):
         fitness = evaluatePatternString(patternString)
         return (fitness,)
 
-    pset = deap.gp.PrimitiveSetTyped("main", [], str)
-    pset.addPrimitive(identity, (int,), int)
-    pset.addPrimitive(concatenate, (str, str), str)
-    pset.addPrimitive(optional, (str,), str)
-    pset.addPrimitive(rrange, (int, int), str)
-    pset.addPrimitive(negatedRange, (int, int), str)
-    pset.addEphemeralConstant("randomPrintableAsciiCode", randomPrintableAsciiCode, int)
-    pset.addEphemeralConstant("randomCharacter", randomCharacter, str)
-    # pset.addEphemeralConstant("whitespace", whitespace, str)
-    pset.addEphemeralConstant("wildcard", wildcard, str)
+    if pset is None:
+        pset = deap.gp.PrimitiveSetTyped("main", [], str)
+        pset.addPrimitive(identity, (int,), int)
+        pset.addPrimitive(concatenate, (str, str), str)
+        pset.addPrimitive(optional, (str,), str)
+        pset.addPrimitive(rrange, (int, int), str)
+        pset.addPrimitive(negatedRange, (int, int), str)
+        pset.addEphemeralConstant("randomPrintableAsciiCode", randomPrintableAsciiCode, int)
+        pset.addEphemeralConstant("randomCharacter", randomCharacter, str)
+        # pset.addEphemeralConstant("whitespace", whitespace, str)
+        pset.addEphemeralConstant("wildcard", wildcard, str)
 
-    deap.creator.create("FitnessMax", deap.base.Fitness, weights=(1.0,))
-    deap.creator.create("Individual", deap.gp.PrimitiveTree, fitness=deap.creator.FitnessMax)
+    if toolbox is None:
+        deap.creator.create("FitnessMax", deap.base.Fitness, weights=(1.0,))
+        deap.creator.create("Individual", deap.gp.PrimitiveTree, fitness=deap.creator.FitnessMax)
 
-    toolbox = deap.base.Toolbox()
-    toolbox.register("expr", deap.gp.genHalfAndHalf, pset=pset, min_=1, max_=2)
-    toolbox.register("individual", deap.tools.initIterate, deap.creator.Individual, toolbox.expr)
-    toolbox.register("population", deap.tools.initRepeat, list, toolbox.individual)
-    toolbox.register("compile", deap.gp.compile, pset=pset)
+        toolbox = deap.base.Toolbox()
+        toolbox.register("expr", deap.gp.genHalfAndHalf, pset=pset, min_=1, max_=2)
+        toolbox.register("individual", deap.tools.initIterate, deap.creator.Individual, toolbox.expr)
+        toolbox.register("population", deap.tools.initRepeat, list, toolbox.individual)
+        toolbox.register("compile", deap.gp.compile, pset=pset)
+
+        toolbox.register("select", deap.tools.selTournament, tournsize=3)
+        toolbox.register("mate", deap.gp.cxOnePoint)
+        toolbox.register("expr_mut", deap.gp.genFull, min_=0, max_=2)
+        toolbox.register("mutate", deap.gp.mutUniform, expr=toolbox.expr_mut, pset=pset)
+
+        toolbox.decorate("mate", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=17))
+        toolbox.decorate("mutate", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=17))
 
     toolbox.register("evaluate", evaluateIndividual)
-    toolbox.register("select", deap.tools.selTournament, tournsize=3)
-    toolbox.register("mate", deap.gp.cxOnePoint)
-    toolbox.register("expr_mut", deap.gp.genFull, min_=0, max_=2)
-    toolbox.register("mutate", deap.gp.mutUniform, expr=toolbox.expr_mut, pset=pset)
-
-    toolbox.decorate("mate", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=17))
-    toolbox.decorate("mutate", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=17))
 
     population = toolbox.population(n=populationSize)
     halloffame = deap.tools.HallOfFame(1)
