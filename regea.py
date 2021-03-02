@@ -98,124 +98,73 @@ def generatePatternString(targetString):
     global pset
     global toolbox
 
-    patternOptionalNegatedRangeSet = regex.compile("\\[\\^\\\\?(.)-\\\\?(.)\\\\n\\\\r\\]\\?")
-    patternNegatedRangeSet = regex.compile("\\[\\^\\\\?(.)-\\\\?(.)\\\\n\\\\r\\]")
-    patternOptionalRangeSet = regex.compile("\\[\\\\?(.)-\\\\?(.)\\]\\?")
-    patternRangeSet = regex.compile("\\[\\\\?(.)-\\\\?(.)\\]")
-    patternOptionalWhitespace = regex.compile("\\(\\[\\\\s\\]\\+\\)\\?")
-    patternWhitespace = regex.compile("\\(\\[\\\\s\\]\\+\\)")
-    patternOptionalWildcard = regex.compile("\\.\\?")
-    patternWildcard = regex.compile("\\.")
-    patternOptionalChar = regex.compile(".\\?")
+    def evaluateIndividual(individual):
+        patternString = toolbox.compile(individual)
 
-    def evaluatePatternString(patternString):  # TODO: update fitness calculation
-        if not patternString:
-            return 0.0
-
-        pattern = regex.compile(patternString, regex.MULTILINE)
+        try:
+            pattern = regex.compile(patternString, regex.MULTILINE)
+        except:
+            print(f"Failed to compile pattern '{patternString}'")
+            sys.exit(1)
         match = pattern.search(targetString)
         if match is None:
-            return 0.0
+            return (0.0,)
 
-        baseFitness = 0
-        nRegexSegments = 0
-        patternStringTrimmed = patternString
+        baseFitness = 0.0
 
-        # Optional negated range sets
-        match = patternOptionalNegatedRangeSet.search(patternStringTrimmed)
-        while match is not None:
-            patternStringTrimmed = patternStringTrimmed[: match.span(0)[0]] + patternStringTrimmed[match.span(0)[1] :]
-            baseFitness -= 1 / (len(string.printable) - (ord(match.group(2)) - ord(match.group(1)) + 1))
-            match = patternOptionalNegatedRangeSet.search(patternStringTrimmed)
+        for iNode in range(len(individual)):
+            node = individual[iNode]
+            if isinstance(node, deap.gp.Primitive):
+                primitiveSubtree = deap.creator.Individual(individual[individual.searchSubtree(iNode)])
 
-        # Mandatory negated range sets
-        match = patternNegatedRangeSet.search(patternStringTrimmed)
-        while match is not None:
-            patternStringTrimmed = patternStringTrimmed[: match.span(0)[0]] + patternStringTrimmed[match.span(0)[1] :]
-            baseFitness += 1 / (len(string.printable) - (ord(match.group(2)) - ord(match.group(1)) + 1))
-            nRegexSegments += 1
-            match = patternNegatedRangeSet.search(patternStringTrimmed)
+                arguments = [None] * node.arity
+                iNodeArgument = 1
+                for iArgument in range(node.arity):
+                    span = primitiveSubtree.searchSubtree(iNodeArgument)
+                    arguments[iArgument] = toolbox.compile(deap.creator.Individual(primitiveSubtree[span]))
+                    iNodeArgument = span.stop
+                else:
+                    assert span.stop == len(primitiveSubtree)
+                if node.name == identity.__name__:
+                    pass
+                elif node.name == concatenate.__name__:
+                    pass
+                elif node.name == optional.__name__:
+                    pass
+                elif node.name == rrange.__name__:
+                    baseFitness += 1 / (abs(arguments[0] - arguments[1]) + 1)
+                elif node.name == negatedRange.__name__:
+                    baseFitness += 1 / (len(string.printable) - abs(arguments[0] - arguments[1]))
+                else:
+                    raise NotImplementedError(f"Unknown primitive node type '{node.name}'")
+            elif isinstance(node, deap.gp.randomPrintableAsciiCode):
+                pass
+            elif isinstance(node, deap.gp.randomCharacter):
+                baseFitness += 1
+            elif isinstance(node, deap.gp.wildcard):
+                baseFitness += 1 / len(string.printable)
+                pass
+            else:
+                raise NotImplementedError(f"Unknown node, type = {type(node)}")
 
-        # Optional range sets
-        match = patternOptionalRangeSet.search(patternStringTrimmed)
-        while match is not None:
-            patternStringTrimmed = patternStringTrimmed[: match.span(0)[0]] + patternStringTrimmed[match.span(0)[1] :]
-            baseFitness -= 1 / (ord(match.group(2)) - ord(match.group(1)) + 1)
-            match = patternOptionalRangeSet.search(patternStringTrimmed)
-
-        # Mandatory range sets
-        match = patternRangeSet.search(patternStringTrimmed)
-        while match is not None:
-            patternStringTrimmed = patternStringTrimmed[: match.span(0)[0]] + patternStringTrimmed[match.span(0)[1] :]
-            baseFitness += 1 / (ord(match.group(2)) - ord(match.group(1)) + 1)
-            nRegexSegments += 1
-            match = patternRangeSet.search(patternStringTrimmed)
-
-        # Optional whitespace
-        # match = patternOptionalWhitespace.search(patternStringTrimmed)
-        # while match is not None:
-        #    patternStringTrimmed = patternStringTrimmed[: match.span(0)[0]] + patternStringTrimmed[match.span(0)[1] :]
-        #    baseFitness -= 1 / len(string.whitespace)
-        #    match = patternOptionalWhitespace.search(patternStringTrimmed)
-
-        # Mandatory whitespace
-        # match = patternWhitespace.search(patternStringTrimmed)
-        # while match is not None:
-        #    patternStringTrimmed = patternStringTrimmed[: match.span(0)[0]] + patternStringTrimmed[match.span(0)[1] :]
-        #    baseFitness += 1 / len(string.whitespace)
-        #    nRegexSegments += 1
-        #    match = patternWhitespace.search(patternStringTrimmed)
-
-        # Optional wildcards
-        match = patternOptionalWildcard.search(patternStringTrimmed)
-        while match is not None:
-            patternStringTrimmed = patternStringTrimmed[: match.span(0)[0]] + patternStringTrimmed[match.span(0)[1] :]
-            baseFitness -= 1 / (len(string.printable))
-            match = patternOptionalWildcard.search(patternStringTrimmed)
-
-        # Mandatory wildcards
-        match = patternWildcard.search(patternStringTrimmed)
-        while match is not None:
-            patternStringTrimmed = patternStringTrimmed[: match.span(0)[0]] + patternStringTrimmed[match.span(0)[1] :]
-            baseFitness += 1 / len(string.printable)
-            match = patternWildcard.search(patternStringTrimmed)
-
-        # Optional characters
-        match = patternOptionalChar.search(patternStringTrimmed)
-        while match is not None:
-            patternStringTrimmed = patternStringTrimmed[: match.span(0)[0]] + patternStringTrimmed[match.span(0)[1] :]
-            baseFitness -= 1
-            match = patternOptionalChar.search(patternStringTrimmed)
-
-        patternStringTrimmed = patternStringTrimmed.replace("\\", "")  # De-escape stuff
-
-        baseFitness += len(patternStringTrimmed)  # Should only be literal characters left
-        nRegexSegments += len(patternStringTrimmed)
-
-        baseFitness *= nRegexSegments ** regexLengthFitnessModifier
         fitness = 0.0
         for iFile in range(len(fileContentsJoined)):
             if pattern.search(fileContentsJoined[iFile]) is not None:
                 fitness += baseFitness / len(targetString) / len(fileContentsJoined)
 
-        return fitness
-
-    def evaluateIndividual(individual):
-        patternString = toolbox.compile(individual)
-        fitness = evaluatePatternString(patternString)
         return (fitness,)
 
     if pset is None:
         pset = deap.gp.PrimitiveSetTyped("main", [], str)
         pset.addPrimitive(identity, (int,), int)
         pset.addPrimitive(concatenate, (str, str), str)
-        pset.addPrimitive(optional, (str,), str)
+        # pset.addPrimitive(optional, (str,), str)
         pset.addPrimitive(rrange, (int, int), str)
         pset.addPrimitive(negatedRange, (int, int), str)
-        pset.addEphemeralConstant("randomPrintableAsciiCode", randomPrintableAsciiCode, int)
-        pset.addEphemeralConstant("randomCharacter", randomCharacter, str)
-        # pset.addEphemeralConstant("whitespace", whitespace, str)
-        pset.addEphemeralConstant("wildcard", wildcard, str)
+        pset.addEphemeralConstant(randomPrintableAsciiCode.__name__, randomPrintableAsciiCode, int)
+        pset.addEphemeralConstant(randomCharacter.__name__, randomCharacter, str)
+        # pset.addEphemeralConstant(whitespace.__name__, whitespace, str)
+        pset.addEphemeralConstant(wildcard.__name__, wildcard, str)
 
     if toolbox is None:
         deap.creator.create("FitnessMax", deap.base.Fitness, weights=(1.0,))
@@ -259,8 +208,10 @@ def generatePatternString(targetString):
         verbose=False,
     )
 
-    patternStringBest = toolbox.compile(halloffame[0])
+    individualBest = halloffame[0]
+    patternStringBest = toolbox.compile(individualBest)
 
+    """
     # Pad beginning
     padMin = 0
     while evaluatePatternString(f".{{{padMin + 1}}}" + patternStringBest) > evaluatePatternString(patternStringBest):
@@ -292,8 +243,10 @@ def generatePatternString(targetString):
         else:
             patternStringBest += f".{{{padMin}}}"
     patternStringBest += "$"
+    """
 
-    assert evaluatePatternString(patternStringBest)
+    # assert evaluatePatternString(patternStringBest)
+    assert evaluateIndividual(individualBest)
     return patternStringBest
 
 
