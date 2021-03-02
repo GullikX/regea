@@ -26,7 +26,6 @@ populationSize = 10000
 nGenerations = 25
 crossoverProbability = 0.10
 mutationProbability = 0.05
-regexLengthFitnessModifier = 4
 asciiMin = 32
 asciiMax = 126
 
@@ -127,12 +126,13 @@ def generatePatternString(targetString):
 
                 arguments = [None] * node.arity
                 iNodeArgument = 1
+                span = slice(0, 0)
                 for iArgument in range(node.arity):
                     span = primitiveSubtree.searchSubtree(iNodeArgument)
                     arguments[iArgument] = toolbox.compile(deap.creator.Individual(primitiveSubtree[span]))
                     iNodeArgument = span.stop
-                else:
-                    assert span.stop == len(primitiveSubtree)
+                assert span.stop == len(primitiveSubtree)
+
                 if node.name == identity.__name__:
                     pass
                 elif node.name == concatenate.__name__:
