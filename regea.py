@@ -98,6 +98,14 @@ def generatePatternString(targetString):
     global pset
     global toolbox
 
+    def countFilesWithMatches(patternString):
+        pattern = regex.compile(patternString, regex.MULTILINE)
+        nFilesWithMatches = 0
+        for iFile in range(len(fileContentsJoined)):
+            if pattern.search(fileContentsJoined[iFile]) is not None:
+                nFilesWithMatches += 1
+        return nFilesWithMatches
+
     def evaluateIndividual(individual):
         patternString = toolbox.compile(individual)
 
@@ -147,10 +155,7 @@ def generatePatternString(targetString):
             else:
                 raise NotImplementedError(f"Unknown node, type = {type(node)}")
 
-        fitness = 0.0
-        for iFile in range(len(fileContentsJoined)):
-            if pattern.search(fileContentsJoined[iFile]) is not None:
-                fitness += baseFitness / len(targetString) / len(fileContentsJoined)
+        fitness = baseFitness * countFilesWithMatches(pattern.pattern) / len(targetString) / len(fileContentsJoined)
 
         return (fitness,)
 
@@ -211,15 +216,14 @@ def generatePatternString(targetString):
     individualBest = halloffame[0]
     patternStringBest = toolbox.compile(individualBest)
 
-    """
+    nFilesWithMatches = countFilesWithMatches(patternStringBest)
+
     # Pad beginning
     padMin = 0
-    while evaluatePatternString(f".{{{padMin + 1}}}" + patternStringBest) > evaluatePatternString(patternStringBest):
+    while countFilesWithMatches(f".{{{padMin + 1}}}" + patternStringBest) == nFilesWithMatches:
         padMin += 1
     padMax = padMin
-    while not evaluatePatternString(f"^.{{{padMin},{padMax}}}" + patternStringBest) > evaluatePatternString(
-        patternStringBest
-    ):
+    while countFilesWithMatches(f"^.{{{padMin},{padMax}}}" + patternStringBest) < nFilesWithMatches:
         padMax += 1
     if padMax > 0:
         if padMax > padMin:
@@ -230,12 +234,10 @@ def generatePatternString(targetString):
 
     # Pad end
     padMin = 0
-    while evaluatePatternString(patternStringBest + f".{{{padMin + 1}}}") > evaluatePatternString(patternStringBest):
+    while countFilesWithMatches(patternStringBest + f".{{{padMin + 1}}}") == nFilesWithMatches:
         padMin += 1
     padMax = padMin
-    while not evaluatePatternString(patternStringBest + f".{{{padMin},{padMax}}}$") > evaluatePatternString(
-        patternStringBest
-    ):
+    while countFilesWithMatches(patternStringBest + f".{{{padMin},{padMax}}}$") < nFilesWithMatches:
         padMax += 1
     if padMax > 0:
         if padMax > padMin:
@@ -243,10 +245,12 @@ def generatePatternString(targetString):
         else:
             patternStringBest += f".{{{padMin}}}"
     patternStringBest += "$"
-    """
 
-    # assert evaluatePatternString(patternStringBest)
     assert evaluateIndividual(individualBest)
+    assert countFilesWithMatches(patternStringBest) == nFilesWithMatches
+    assert patternStringBest.startswith("^")
+    assert patternStringBest.endswith("$")
+
     return patternStringBest
 
 
