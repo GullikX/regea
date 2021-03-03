@@ -148,6 +148,16 @@ class Wildcard:
         return 1 / len(string.printable)
 
 
+class WordBoundary:
+    returns = str
+
+    def ephemeralConstant():
+        return "\\b"
+
+    def fitness():
+        return 1
+
+
 # Genetic programming algorithm
 def generatePatternString(targetString):
     global pset
@@ -164,6 +174,7 @@ def generatePatternString(targetString):
         RandomPrintableAsciiCode.__name__: RandomPrintableAsciiCode,
         RandomCharacter.__name__: RandomCharacter,
         Wildcard.__name__: Wildcard,
+        WordBoundary.__name__: WordBoundary,
     }
 
     def countFilesWithMatches(patternString):
@@ -176,6 +187,10 @@ def generatePatternString(targetString):
 
     def evaluateIndividual(individual):
         patternString = toolbox.compile(individual)
+
+        # TODO: prevent double word boundaries from being created
+        if "\\b\\b" in patternString:
+            return (0.0,)
 
         try:
             pattern = regex.compile(patternString, regex.MULTILINE)
