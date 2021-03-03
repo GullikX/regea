@@ -54,14 +54,28 @@ def main(argv):
         frequencyMeansMap[patternStrings[iPattern]] = frequencyMeans[iPattern]
         frequencyStddevsMap[patternStrings[iPattern]] = frequencyStddevs[iPattern]
 
+    patterns = [None] * len(patternStrings)
+    for iPattern in range(len(patternStrings)):
+        patterns[iPattern] = regex.compile(patternStrings[iPattern], regex.MULTILINE)
+
+    # Sanity check
+    for iFile in range(len(referenceFileContents)):
+        for iLine in range(len(referenceFileContents[iFile])):
+            for iPattern in range(len(patterns)):
+                if patterns[iPattern].match(referenceFileContents[iFile][iLine]) is not None:
+                    break
+            else:
+                raise AssertionError(
+                    f"Line '{referenceFiles[iFile]}:{iLine}' at {referenceFiles[iFile]}:{iLine} not matched by any pattern."
+                )
+
     # Check for discrepancies
     linesMatched = [False] * len(errorFileContents)
     errorFrequencies = {}
-    for iPattern in range(len(patternStrings)):
-        pattern = regex.compile(patternStrings[iPattern])
+    for iPattern in range(len(patterns)):
         errorFrequencies[patternStrings[iPattern]] = 0
         for iLine in range(len(errorFileContents)):
-            if pattern.search(errorFileContents[iLine]) is not None:
+            if patterns[iPattern].search(errorFileContents[iLine]) is not None:
                 errorFrequencies[patternStrings[iPattern]] += 1
                 linesMatched[iLine] = True
 
@@ -84,17 +98,16 @@ def main(argv):
         ):
             continue
 
-        pattern = regex.compile(patternStrings[iPattern], regex.MULTILINE)
         occuranceMap = {}
 
-        for match in pattern.finditer("\n".join(errorFileContents)):
+        for match in patterns[iPattern].finditer("\n".join(errorFileContents)):
             matchedString = match.string[match.span()[0] : match.span()[1]]
             if matchedString not in occuranceMap:
                 occuranceMap[matchedString] = 0.0
             occuranceMap[matchedString] += 1.0
 
         for iFile in range(len(referenceFileContents)):
-            for match in pattern.finditer("\n".join(referenceFileContents[iFile])):
+            for match in patterns[iPattern].finditer("\n".join(referenceFileContents[iFile])):
                 matchedString = match.string[match.span()[0] : match.span()[1]]
                 if matchedString not in occuranceMap:
                     occuranceMap[matchedString] = 0.0
