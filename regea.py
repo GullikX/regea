@@ -52,50 +52,119 @@ def argmin(iterable):
     return min(range(len(iterable)), key=iterable.__getitem__)
 
 
-# Genetic programming functions
-def identity(left):
-    return left
+# Genetic programming primitives
+class Identity:
+    argTypes = (int,)
+    arity = len(argTypes)
+    returns = int
+
+    def primitive(left):
+        return left
+
+    def fitness(args):
+        assert len(args) == Identity.arity
+        return 0
 
 
-def concatenate(left, right):
-    return left + right
+class Concatenate:
+    argTypes = (str, str)
+    arity = len(argTypes)
+    returns = str
+
+    def primitive(left, right):
+        return left + right
+
+    def fitness(args):
+        assert len(args) == Concatenate.arity
+        return 0
 
 
-def optional(left):
-    return left if left.endswith("?") else f"{left}?"
+# def optional(left):
+#    return left if left.endswith("?") else f"{left}?"
 
 
-def rrange(left, right):
-    if left == right:
-        return regex.escape(chr(left))
-    return f"[{regex.escape(chr(min(left, right)))}-{regex.escape(chr(max(left, right)))}]"
+class Range:
+    argTypes = (int, int)
+    arity = len(argTypes)
+    returns = str
+
+    def primitive(left, right):
+        if left == right:
+            return regex.escape(chr(left))
+        return f"[{regex.escape(chr(min(left, right)))}-{regex.escape(chr(max(left, right)))}]"
+
+    def fitness(args):
+        assert len(args) == Range.arity
+        return 1 / (abs(args[0] - args[1]) + 1)
 
 
-def negatedRange(left, right):
-    # if left == right:
-    #    return f"[^{regex.escape(chr(left))}]"
-    return f"[^{regex.escape(chr(min(left, right)))}-{regex.escape(chr(max(left, right)))}\\n\\r]"
+class NegatedRange:
+    argTypes = (int, int)
+    arity = len(argTypes)
+    returns = str
+
+    def primitive(left, right):
+        if left == right:
+            return f"[^{regex.escape(chr(left))}\\n\\r]"
+        return f"[^{regex.escape(chr(min(left, right)))}-{regex.escape(chr(max(left, right)))}\\n\\r]"
+
+    def fitness(args):
+        assert len(args) == NegatedRange.arity
+        return 1 / (len(string.printable) - abs(args[0] - args[1]))
 
 
-def randomPrintableAsciiCode():
-    return random.randint(asciiMin, asciiMax)
+# Genetic programming ephemeral constants
+class RandomPrintableAsciiCode:
+    returns = int
+
+    def ephemeralConstant():
+        return random.randint(asciiMin, asciiMax)
+
+    def fitness():
+        return 0
 
 
-def randomCharacter():
-    return regex.escape(chr(random.randint(asciiMin, asciiMax)))
+class RandomCharacter:
+    returns = str
+
+    def ephemeralConstant():
+        return regex.escape(chr(random.randint(asciiMin, asciiMax)))
+
+    def fitness():
+        return 1
 
 
 # def whitespace():
 #    return "([\s]+)"
 
 
-def wildcard():
-    return "."
+class Wildcard:
+    returns = str
+
+    def ephemeralConstant():
+        return "."
+
+    def fitness():
+        return 1 / len(string.printable)
 
 
+# Genetic programming algorithm
 def generatePatternString(targetString):
     global pset
     global toolbox
+
+    primitives = {
+        Identity.__name__: Identity,
+        Concatenate.__name__: Concatenate,
+        Range.__name__: Range,
+        NegatedRange.__name__: NegatedRange,
+    }
+
+    ephemeralConstants = {
+        RandomPrintableAsciiCode.__name__: RandomPrintableAsciiCode,
+        RandomCharacter.__name__: RandomCharacter,
+        Wildcard.__name__: Wildcard,
+    }
 
     def countFilesWithMatches(patternString):
         pattern = regex.compile(patternString, regex.MULTILINE)
@@ -124,36 +193,19 @@ def generatePatternString(targetString):
             if isinstance(node, deap.gp.Primitive):
                 primitiveSubtree = deap.creator.Individual(individual[individual.searchSubtree(iNode)])
 
-                arguments = [None] * node.arity
+                args = [None] * node.arity
                 iNodeArgument = 1
                 span = slice(0, 0)
                 for iArgument in range(node.arity):
                     span = primitiveSubtree.searchSubtree(iNodeArgument)
-                    arguments[iArgument] = toolbox.compile(deap.creator.Individual(primitiveSubtree[span]))
+                    args[iArgument] = toolbox.compile(deap.creator.Individual(primitiveSubtree[span]))
                     iNodeArgument = span.stop
                 assert span.stop == len(primitiveSubtree)
 
-                if node.name == identity.__name__:
-                    pass
-                elif node.name == concatenate.__name__:
-                    pass
-                elif node.name == optional.__name__:
-                    pass
-                elif node.name == rrange.__name__:
-                    baseFitness += 1 / (abs(arguments[0] - arguments[1]) + 1)
-                elif node.name == negatedRange.__name__:
-                    baseFitness += 1 / (len(string.printable) - abs(arguments[0] - arguments[1]))
-                else:
-                    raise NotImplementedError(f"Unknown primitive node type '{node.name}'")
-            elif isinstance(node, deap.gp.randomPrintableAsciiCode):
-                pass
-            elif isinstance(node, deap.gp.randomCharacter):
-                baseFitness += 1
-            elif isinstance(node, deap.gp.wildcard):
-                baseFitness += 1 / len(string.printable)
-                pass
+                baseFitness += primitives[node.name].fitness(args)
+
             else:
-                raise NotImplementedError(f"Unknown node, type = {type(node)}")
+                baseFitness += ephemeralConstants[node.__class__.__name__].fitness()
 
         fitness = baseFitness * countFilesWithMatches(pattern.pattern) / len(targetString) / len(fileContentsJoined)
 
@@ -161,15 +213,16 @@ def generatePatternString(targetString):
 
     if pset is None:
         pset = deap.gp.PrimitiveSetTyped("main", [], str)
-        pset.addPrimitive(identity, (int,), int)
-        pset.addPrimitive(concatenate, (str, str), str)
-        # pset.addPrimitive(optional, (str,), str)
-        pset.addPrimitive(rrange, (int, int), str)
-        pset.addPrimitive(negatedRange, (int, int), str)
-        pset.addEphemeralConstant(randomPrintableAsciiCode.__name__, randomPrintableAsciiCode, int)
-        pset.addEphemeralConstant(randomCharacter.__name__, randomCharacter, str)
-        # pset.addEphemeralConstant(whitespace.__name__, whitespace, str)
-        pset.addEphemeralConstant(wildcard.__name__, wildcard, str)
+
+        for primitive in primitives.values():
+            pset.addPrimitive(primitive.primitive, primitive.argTypes, primitive.returns, name=primitive.__name__)
+
+        for ephemeralConstant in ephemeralConstants.values():
+            pset.addEphemeralConstant(
+                ephemeralConstant.__name__,
+                ephemeralConstant.ephemeralConstant,
+                ephemeralConstant.returns,
+            )
 
     if toolbox is None:
         deap.creator.create("FitnessMax", deap.base.Fitness, weights=(1.0,))
