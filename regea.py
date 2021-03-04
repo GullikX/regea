@@ -76,7 +76,7 @@ class Concatenate:
 
     def fitness(args):
         assert len(args) == Concatenate.arity
-        return 0
+        return 1
 
 
 # def optional(left):
