@@ -288,10 +288,16 @@ def generatePatternString(targetString):
 
     # Pad beginning
     padMin = 0
-    while countFilesWithMatches(f".{{{padMin + 1}}}" + patternStringBest) == nFilesWithMatches:
+    while (
+        regex.compile(f".{{{padMin + 1}}}" + patternStringBest, regex.MULTILINE).search(targetString) is not None
+        and countFilesWithMatches(f".{{{padMin + 1}}}" + patternStringBest) == nFilesWithMatches
+    ):
         padMin += 1
     padMax = padMin
-    while countFilesWithMatches(f"^.{{{padMin},{padMax}}}" + patternStringBest) < nFilesWithMatches:
+    while (
+        regex.compile(f"^.{{{padMin},{padMax}}}" + patternStringBest, regex.MULTILINE).search(targetString) is None
+        or countFilesWithMatches(f"^.{{{padMin},{padMax}}}" + patternStringBest) < nFilesWithMatches
+    ):
         padMax += 1
     if padMax > 0:
         if padMax > padMin:
@@ -302,10 +308,16 @@ def generatePatternString(targetString):
 
     # Pad end
     padMin = 0
-    while countFilesWithMatches(patternStringBest + f".{{{padMin + 1}}}") == nFilesWithMatches:
+    while (
+        regex.compile(patternStringBest + f".{{{padMin + 1}}}", regex.MULTILINE).search(targetString) is not None
+        and countFilesWithMatches(patternStringBest + f".{{{padMin + 1}}}") == nFilesWithMatches
+    ):
         padMin += 1
     padMax = padMin
-    while countFilesWithMatches(patternStringBest + f".{{{padMin},{padMax}}}$") < nFilesWithMatches:
+    while (
+        regex.compile(patternStringBest + f".{{{padMin},{padMax}}}$", regex.MULTILINE).search(targetString) is None
+        or countFilesWithMatches(patternStringBest + f".{{{padMin},{padMax}}}$") < nFilesWithMatches
+    ):
         padMax += 1
     if padMax > 0:
         if padMax > padMin:
@@ -314,6 +326,7 @@ def generatePatternString(targetString):
             patternStringBest += f".{{{padMin}}}"
     patternStringBest += "$"
 
+    assert regex.compile(patternStringBest, regex.MULTILINE).search(targetString) is not None
     assert evaluateIndividual(individualBest)
     assert countFilesWithMatches(patternStringBest) == nFilesWithMatches
     assert patternStringBest.startswith("^")
