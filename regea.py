@@ -134,14 +134,11 @@ class RandomCharacter:
         return 1
 
 
-# def whitespace():
-#    return "([\s]+)"
-
-
+# Genetic programming terminals
 class Wildcard:
     returns = str
 
-    def ephemeralConstant():
+    def terminal():
         return "."
 
     def fitness():
@@ -151,7 +148,7 @@ class Wildcard:
 class WordBoundary:
     returns = str
 
-    def ephemeralConstant():
+    def terminal():
         return "\\b"
 
     def fitness():
@@ -173,6 +170,9 @@ def generatePatternString(targetString):
     ephemeralConstants = {
         RandomPrintableAsciiCode.__name__: RandomPrintableAsciiCode,
         RandomCharacter.__name__: RandomCharacter,
+    }
+
+    terminals = {
         Wildcard.__name__: Wildcard,
         WordBoundary.__name__: WordBoundary,
     }
@@ -218,9 +218,12 @@ def generatePatternString(targetString):
                 assert span.stop == len(primitiveSubtree)
 
                 baseFitness += primitives[node.name].fitness(args)
-
-            else:
+            elif isinstance(node, deap.gp.Ephemeral):
                 baseFitness += ephemeralConstants[node.__class__.__name__].fitness()
+            elif isinstance(node, deap.gp.Terminal):
+                baseFitness += terminals[node.name].fitness()
+            else:
+                raise ValueError(f"Unknown node {node} of type {type(node)}")
 
         fitness = baseFitness * countFilesWithMatches(pattern.pattern) / len(targetString) / len(fileContentsJoined)
 
@@ -238,6 +241,9 @@ def generatePatternString(targetString):
                 ephemeralConstant.ephemeralConstant,
                 ephemeralConstant.returns,
             )
+
+        for terminal in terminals.values():
+            pset.addTerminal(terminal.terminal(), terminal.returns, name=terminal.__name__)
 
     if toolbox is None:
         deap.creator.create("FitnessMax", deap.base.Fitness, weights=(1.0,))
