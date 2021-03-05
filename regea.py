@@ -28,6 +28,8 @@ crossoverProbability = 0.10
 mutationProbability = 0.05
 asciiMin = 32
 asciiMax = 126
+allowedCharacters = [regex.escape(chr(i)) for i in range(asciiMin, asciiMax + 1)]
+nAllowedCharacters = len(allowedCharacters)
 
 # OpenMPI parameters
 comm = MPI.COMM_WORLD
@@ -52,8 +54,25 @@ def argmin(iterable):
     return min(range(len(iterable)), key=iterable.__getitem__)
 
 
+def argmax(iterable):
+    return max(range(len(iterable)), key=iterable.__getitem__)
+
+
 # Genetic programming primitives
-class Identity:
+class IdentityFloat:
+    argTypes = (float,)
+    arity = len(argTypes)
+    returns = float
+
+    def primitive(left):
+        return left
+
+    def fitness(args):
+        assert len(args) == IdentityFloat.arity
+        return 0
+
+
+class IdentityInt:
     argTypes = (int,)
     arity = len(argTypes)
     returns = int
@@ -62,7 +81,7 @@ class Identity:
         return left
 
     def fitness(args):
-        assert len(args) == Identity.arity
+        assert len(args) == IdentityInt.arity
         return 0
 
 
@@ -113,6 +132,448 @@ class NegatedRange:
         return 1 / (len(string.printable) - abs(args[0] - args[1]))
 
 
+class Set:
+    argTypes = (float,) * nAllowedCharacters  # TODO: bool input
+    arity = len(argTypes)
+    returns = str
+
+    def primitive(
+        c0,
+        c1,
+        c2,
+        c3,
+        c4,
+        c5,
+        c6,
+        c7,
+        c8,
+        c9,
+        c10,
+        c11,
+        c12,
+        c13,
+        c14,
+        c15,
+        c16,
+        c17,
+        c18,
+        c19,
+        c20,
+        c21,
+        c22,
+        c23,
+        c24,
+        c25,
+        c26,
+        c27,
+        c28,
+        c29,
+        c30,
+        c31,
+        c32,
+        c33,
+        c34,
+        c35,
+        c36,
+        c37,
+        c38,
+        c39,
+        c40,
+        c41,
+        c42,
+        c43,
+        c44,
+        c45,
+        c46,
+        c47,
+        c48,
+        c49,
+        c50,
+        c51,
+        c52,
+        c53,
+        c54,
+        c55,
+        c56,
+        c57,
+        c58,
+        c59,
+        c60,
+        c61,
+        c62,
+        c63,
+        c64,
+        c65,
+        c66,
+        c67,
+        c68,
+        c69,
+        c70,
+        c71,
+        c72,
+        c73,
+        c74,
+        c75,
+        c76,
+        c77,
+        c78,
+        c79,
+        c80,
+        c81,
+        c82,
+        c83,
+        c84,
+        c85,
+        c86,
+        c87,
+        c88,
+        c89,
+        c90,
+        c91,
+        c92,
+        c93,
+        c94,
+    ):
+        charactersInSet = list(
+            np.array(
+                (
+                    c0,
+                    c1,
+                    c2,
+                    c3,
+                    c4,
+                    c5,
+                    c6,
+                    c7,
+                    c8,
+                    c9,
+                    c10,
+                    c11,
+                    c12,
+                    c13,
+                    c14,
+                    c15,
+                    c16,
+                    c17,
+                    c18,
+                    c19,
+                    c20,
+                    c21,
+                    c22,
+                    c23,
+                    c24,
+                    c25,
+                    c26,
+                    c27,
+                    c28,
+                    c29,
+                    c30,
+                    c31,
+                    c32,
+                    c33,
+                    c34,
+                    c35,
+                    c36,
+                    c37,
+                    c38,
+                    c39,
+                    c40,
+                    c41,
+                    c42,
+                    c43,
+                    c44,
+                    c45,
+                    c46,
+                    c47,
+                    c48,
+                    c49,
+                    c50,
+                    c51,
+                    c52,
+                    c53,
+                    c54,
+                    c55,
+                    c56,
+                    c57,
+                    c58,
+                    c59,
+                    c60,
+                    c61,
+                    c62,
+                    c63,
+                    c64,
+                    c65,
+                    c66,
+                    c67,
+                    c68,
+                    c69,
+                    c70,
+                    c71,
+                    c72,
+                    c73,
+                    c74,
+                    c75,
+                    c76,
+                    c77,
+                    c78,
+                    c79,
+                    c80,
+                    c81,
+                    c82,
+                    c83,
+                    c84,
+                    c85,
+                    c86,
+                    c87,
+                    c88,
+                    c89,
+                    c90,
+                    c91,
+                    c92,
+                    c93,
+                    c94,
+                )
+            )
+            > 0.5
+        )
+        assert len(charactersInSet) == nAllowedCharacters
+        nCharactersInSet = sum(charactersInSet)
+        if nCharactersInSet == 0:
+            return ""
+        elif nCharactersInSet == 1:
+            return allowedCharacters[argmax(charactersInSet)]
+        else:
+            characters = "".join([allowedCharacters[i] for i in range(nAllowedCharacters) if charactersInSet[i]])
+            return f"[{characters}]"
+
+    def fitness(args):
+        assert len(args) == Set.arity
+        try:
+            return 1 / sum(args)
+        except ZeroDivisionError:
+            return 0
+
+
+class NegatedSet:
+    argTypes = (float,) * nAllowedCharacters  # TODO: bool input
+    arity = len(argTypes)
+    returns = str
+
+    def primitive(
+        c0,
+        c1,
+        c2,
+        c3,
+        c4,
+        c5,
+        c6,
+        c7,
+        c8,
+        c9,
+        c10,
+        c11,
+        c12,
+        c13,
+        c14,
+        c15,
+        c16,
+        c17,
+        c18,
+        c19,
+        c20,
+        c21,
+        c22,
+        c23,
+        c24,
+        c25,
+        c26,
+        c27,
+        c28,
+        c29,
+        c30,
+        c31,
+        c32,
+        c33,
+        c34,
+        c35,
+        c36,
+        c37,
+        c38,
+        c39,
+        c40,
+        c41,
+        c42,
+        c43,
+        c44,
+        c45,
+        c46,
+        c47,
+        c48,
+        c49,
+        c50,
+        c51,
+        c52,
+        c53,
+        c54,
+        c55,
+        c56,
+        c57,
+        c58,
+        c59,
+        c60,
+        c61,
+        c62,
+        c63,
+        c64,
+        c65,
+        c66,
+        c67,
+        c68,
+        c69,
+        c70,
+        c71,
+        c72,
+        c73,
+        c74,
+        c75,
+        c76,
+        c77,
+        c78,
+        c79,
+        c80,
+        c81,
+        c82,
+        c83,
+        c84,
+        c85,
+        c86,
+        c87,
+        c88,
+        c89,
+        c90,
+        c91,
+        c92,
+        c93,
+        c94,
+    ):
+        charactersInSet = list(
+            np.array(
+                (
+                    c0,
+                    c1,
+                    c2,
+                    c3,
+                    c4,
+                    c5,
+                    c6,
+                    c7,
+                    c8,
+                    c9,
+                    c10,
+                    c11,
+                    c12,
+                    c13,
+                    c14,
+                    c15,
+                    c16,
+                    c17,
+                    c18,
+                    c19,
+                    c20,
+                    c21,
+                    c22,
+                    c23,
+                    c24,
+                    c25,
+                    c26,
+                    c27,
+                    c28,
+                    c29,
+                    c30,
+                    c31,
+                    c32,
+                    c33,
+                    c34,
+                    c35,
+                    c36,
+                    c37,
+                    c38,
+                    c39,
+                    c40,
+                    c41,
+                    c42,
+                    c43,
+                    c44,
+                    c45,
+                    c46,
+                    c47,
+                    c48,
+                    c49,
+                    c50,
+                    c51,
+                    c52,
+                    c53,
+                    c54,
+                    c55,
+                    c56,
+                    c57,
+                    c58,
+                    c59,
+                    c60,
+                    c61,
+                    c62,
+                    c63,
+                    c64,
+                    c65,
+                    c66,
+                    c67,
+                    c68,
+                    c69,
+                    c70,
+                    c71,
+                    c72,
+                    c73,
+                    c74,
+                    c75,
+                    c76,
+                    c77,
+                    c78,
+                    c79,
+                    c80,
+                    c81,
+                    c82,
+                    c83,
+                    c84,
+                    c85,
+                    c86,
+                    c87,
+                    c88,
+                    c89,
+                    c90,
+                    c91,
+                    c92,
+                    c93,
+                    c94,
+                )
+            )
+            > 0.5
+        )
+        assert len(charactersInSet) == nAllowedCharacters
+        nCharactersInSet = sum(charactersInSet)
+        if nCharactersInSet == 0:
+            return ""
+        else:
+            characters = "".join([allowedCharacters[i] for i in range(nAllowedCharacters) if charactersInSet[i]])
+            return f"[^{characters}]"
+
+    def fitness(args):
+        assert len(args) == Set.arity
+        try:
+            return 1 / (nAllowedCharacters - sum(args))
+        except ZeroDivisionError:
+            return 0
+
+
 # Genetic programming ephemeral constants
 class RandomPrintableAsciiCode:
     returns = int
@@ -132,6 +593,16 @@ class RandomCharacter:
 
     def fitness():
         return 1
+
+
+class RandomFloat:
+    returns = float
+
+    def ephemeralConstant():
+        return random.random()
+
+    def fitness():
+        return 0
 
 
 # Genetic programming terminals
@@ -161,15 +632,19 @@ def generatePatternString(targetString):
     global toolbox
 
     primitives = {
-        Identity.__name__: Identity,
+        IdentityFloat.__name__: IdentityFloat,
+        IdentityInt.__name__: IdentityInt,
         Concatenate.__name__: Concatenate,
         Range.__name__: Range,
         NegatedRange.__name__: NegatedRange,
+        Set.__name__: Set,
+        NegatedSet.__name__: NegatedSet,
     }
 
     ephemeralConstants = {
         RandomPrintableAsciiCode.__name__: RandomPrintableAsciiCode,
         RandomCharacter.__name__: RandomCharacter,
+        RandomFloat.__name__: RandomFloat,
     }
 
     terminals = {
