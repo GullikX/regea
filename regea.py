@@ -26,6 +26,7 @@ populationSize = 10000
 nGenerations = 25
 crossoverProbability = 0.10
 mutationProbability = 0.05
+treeHeightMax = 17
 asciiMin = 32
 asciiMax = 126
 allowedCharacters = [regex.escape(chr(i)) for i in range(asciiMin, asciiMax + 1)]
@@ -44,7 +45,8 @@ nWorkerNodes = size - 1
 fileContentsSplit = []
 fileContentsSplitConcatenated = []
 fileContentsJoined = []
-pset = None
+psetInit = None
+psetMutate = None
 toolbox = None
 timeStart = time.time()
 
@@ -95,7 +97,7 @@ class Concatenate:
 
     def fitness(args):
         assert len(args) == Concatenate.arity
-        return 1
+        return 0
 
 
 # def optional(left):
@@ -628,7 +630,8 @@ class WordBoundary:
 
 # Genetic programming algorithm
 def generatePatternString(targetString):
-    global pset
+    global psetInit
+    global psetMutate
     global toolbox
 
     primitives = {
@@ -704,39 +707,48 @@ def generatePatternString(targetString):
 
         return (fitness,)
 
-    if pset is None:
-        pset = deap.gp.PrimitiveSetTyped("main", [], str)
+    if psetInit is None:
+        psetInit = deap.gp.PrimitiveSetTyped("psetInit", [], str)
+        psetInit.addPrimitive(
+            Concatenate.primitive, Concatenate.argTypes, Concatenate.returns, name=Concatenate.__name__
+        )
+        psetInit.addTerminal(Wildcard.terminal(), Wildcard.returns, name=Wildcard.__name__)
+
+    if psetMutate is None:
+        psetMutate = deap.gp.PrimitiveSetTyped("psetMutate", [], str)
 
         for primitive in primitives.values():
-            pset.addPrimitive(primitive.primitive, primitive.argTypes, primitive.returns, name=primitive.__name__)
+            psetMutate.addPrimitive(primitive.primitive, primitive.argTypes, primitive.returns, name=primitive.__name__)
 
         for ephemeralConstant in ephemeralConstants.values():
-            pset.addEphemeralConstant(
+            psetMutate.addEphemeralConstant(
                 ephemeralConstant.__name__,
                 ephemeralConstant.ephemeralConstant,
                 ephemeralConstant.returns,
             )
 
         for terminal in terminals.values():
-            pset.addTerminal(terminal.terminal(), terminal.returns, name=terminal.__name__)
+            psetMutate.addTerminal(terminal.terminal(), terminal.returns, name=terminal.__name__)
 
     if toolbox is None:
         deap.creator.create("FitnessMax", deap.base.Fitness, weights=(1.0,))
         deap.creator.create("Individual", deap.gp.PrimitiveTree, fitness=deap.creator.FitnessMax)
 
+        treeHeightInit = min(int(np.log(len(targetString)) / np.log(Concatenate.arity)), treeHeightMax)
+
         toolbox = deap.base.Toolbox()
-        toolbox.register("expr", deap.gp.genHalfAndHalf, pset=pset, min_=1, max_=2)
+        toolbox.register("expr", deap.gp.genHalfAndHalf, pset=psetInit, min_=treeHeightInit, max_=treeHeightInit)
         toolbox.register("individual", deap.tools.initIterate, deap.creator.Individual, toolbox.expr)
         toolbox.register("population", deap.tools.initRepeat, list, toolbox.individual)
-        toolbox.register("compile", deap.gp.compile, pset=pset)
+        toolbox.register("compile", deap.gp.compile, pset=psetMutate)
 
         toolbox.register("select", deap.tools.selTournament, tournsize=3)
         toolbox.register("mate", deap.gp.cxOnePoint)
         toolbox.register("expr_mut", deap.gp.genFull, min_=0, max_=2)
-        toolbox.register("mutate", deap.gp.mutUniform, expr=toolbox.expr_mut, pset=pset)
+        toolbox.register("mutate", deap.gp.mutUniform, expr=toolbox.expr_mut, pset=psetMutate)
 
-        toolbox.decorate("mate", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=17))
-        toolbox.decorate("mutate", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=17))
+        toolbox.decorate("mate", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=treeHeightMax))
+        toolbox.decorate("mutate", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=treeHeightMax))
 
     toolbox.register("evaluate", evaluateIndividual)
 
