@@ -734,12 +734,7 @@ def generatePatternString(targetString):
         deap.creator.create("FitnessMax", deap.base.Fitness, weights=(1.0,))
         deap.creator.create("Individual", deap.gp.PrimitiveTree, fitness=deap.creator.FitnessMax)
 
-        treeHeightInit = min(int(np.log(len(targetString)) / np.log(Concatenate.arity)), treeHeightMax)
-
         toolbox = deap.base.Toolbox()
-        toolbox.register("expr", deap.gp.genHalfAndHalf, pset=psetInit, min_=treeHeightInit, max_=treeHeightInit)
-        toolbox.register("individual", deap.tools.initIterate, deap.creator.Individual, toolbox.expr)
-        toolbox.register("population", deap.tools.initRepeat, list, toolbox.individual)
         toolbox.register("compile", deap.gp.compile, pset=psetMutate)
 
         toolbox.register("select", deap.tools.selTournament, tournsize=3)
@@ -750,9 +745,18 @@ def generatePatternString(targetString):
         toolbox.decorate("mate", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=treeHeightMax))
         toolbox.decorate("mutate", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=treeHeightMax))
 
+    treeHeightInit = min(int(np.log(len(targetString)) / np.log(Concatenate.arity)), treeHeightMax)
+    toolbox.register("expr", deap.gp.genHalfAndHalf, pset=psetInit, min_=treeHeightInit, max_=treeHeightInit)
+    toolbox.register("individual", deap.tools.initIterate, deap.creator.Individual, toolbox.expr)
+    toolbox.register("population", deap.tools.initRepeat, list, toolbox.individual)
     toolbox.register("evaluate", evaluateIndividual)
 
     population = toolbox.population(n=populationSize)
+    for individual in population:
+        assert (
+            evaluateIndividual(individual)[0] > 0
+        ), f"targetString: '{targetString}' ({len(targetString)}), individual: '{toolbox.compile(individual)}' ({len(toolbox.compile(individual))})"
+
     halloffame = deap.tools.HallOfFame(1)
 
     stats_fit = deap.tools.Statistics(lambda ind: ind.fitness.values)
