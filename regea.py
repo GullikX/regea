@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import copy
 import deap
 import deap.algorithms
 import deap.base
@@ -812,6 +813,9 @@ def generatePatternString(targetString):
         # Update the hall of fame with the generated individuals
         hallOfFame.update(offspring)
 
+        # Keep best individual in the population at all times
+        offspring[0] = copy.deepcopy(hallOfFame[0])
+
         # Replace the current population by the offspring
         population[:] = offspring
 
@@ -821,7 +825,7 @@ def generatePatternString(targetString):
         # if verbose:
         #    print(logbook.stream)
 
-    individualBest = hallOfFame[0]
+    individualBest = copy.deepcopy(hallOfFame[0])
     patternStringBest = toolbox.compile(individualBest)
 
     nFilesWithMatches = countFilesWithMatches(patternStringBest)
