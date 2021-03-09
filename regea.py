@@ -759,24 +759,55 @@ def generatePatternString(targetString):
 
     halloffame = deap.tools.HallOfFame(1)
 
-    stats_fit = deap.tools.Statistics(lambda ind: ind.fitness.values)
-    stats_size = deap.tools.Statistics(len)
-    mstats = deap.tools.MultiStatistics(fitness=stats_fit, size=stats_size)
-    mstats.register("avg", np.mean)
-    mstats.register("std", np.std)
-    mstats.register("min", np.min)
-    mstats.register("max", np.max)
+    # stats_fit = deap.tools.Statistics(lambda ind: ind.fitness.values)
+    # stats_size = deap.tools.Statistics(len)
+    # stats = deap.tools.MultiStatistics(fitness=stats_fit, size=stats_size)
+    # stats.register("avg", np.mean)
+    # stats.register("std", np.std)
+    # stats.register("min", np.min)
+    # stats.register("max", np.max)
 
-    deap.algorithms.eaSimple(
-        population,
-        toolbox,
-        crossoverProbability,
-        mutationProbability,
-        nGenerations,
-        stats=mstats,
-        halloffame=halloffame,
-        verbose=False,
-    )
+    # logbook = deap.tools.Logbook()
+    # logbook.header = ['gen', 'nevals'] + (stats.fields if stats else [])
+
+    # Evaluate the individuals with an invalid fitness
+    invalidIndividuals = [individual for individual in population if not individual.fitness.valid]
+    fitnesses = toolbox.map(toolbox.evaluate, invalidIndividuals)
+    for individual, fitness in zip(invalidIndividuals, fitnesses):
+        individual.fitness.values = fitness
+
+    halloffame.update(population)
+
+    # record = stats.compile(population) if stats else {}
+    # logbook.record(gen=0, nevals=len(invalid_ind), **record)
+    # if verbose:
+    #    print(logbook.stream)
+
+    # Begin the generational process
+    for iGeneration in range(1, nGenerations + 1):
+        # Select the next generation individuals
+        offspring = toolbox.select(population, len(population))
+
+        # Vary the pool of individuals
+        offspring = deap.algorithms.varAnd(offspring, toolbox, crossoverProbability, mutationProbability)
+
+        # Evaluate the individuals with an invalid fitness
+        invalidIndividuals = [individual for individual in offspring if not individual.fitness.valid]
+        fitnesses = toolbox.map(toolbox.evaluate, invalidIndividuals)
+        for individual, fitness in zip(invalidIndividuals, fitnesses):
+            individual.fitness.values = fitness
+
+        # Update the hall of fame with the generated individuals
+        halloffame.update(offspring)
+
+        # Replace the current population by the offspring
+        population[:] = offspring
+
+        # Append the current generation statistics to the logbook
+        # record = stats.compile(population) if stats else {}
+        # logbook.record(gen=iGeneration, nevals=len(invalid_ind), **record)
+        # if verbose:
+        #    print(logbook.stream)
 
     individualBest = halloffame[0]
     patternStringBest = toolbox.compile(individualBest)
