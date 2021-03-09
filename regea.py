@@ -789,7 +789,19 @@ def generatePatternString(targetString):
         offspring = toolbox.select(population, len(population))
 
         # Vary the pool of individuals
-        offspring = deap.algorithms.varAnd(offspring, toolbox, crossoverProbability, mutationProbability)
+        offspringTemp = [toolbox.clone(ind) for ind in offspring]
+
+        for i in range(1, len(offspringTemp), 2):
+            if random.random() < crossoverProbability:
+                offspringTemp[i - 1], offspringTemp[i] = toolbox.mate(offspringTemp[i - 1], offspringTemp[i])
+                del offspringTemp[i - 1].fitness.values, offspringTemp[i].fitness.values
+
+        for i in range(len(offspringTemp)):
+            if random.random() < mutationProbability:
+                (offspringTemp[i],) = toolbox.mutate(offspringTemp[i])
+                del offspringTemp[i].fitness.values
+
+        offspring = offspringTemp
 
         # Evaluate the individuals with an invalid fitness
         invalidIndividuals = [individual for individual in offspring if not individual.fitness.valid]
