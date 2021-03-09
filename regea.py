@@ -757,7 +757,7 @@ def generatePatternString(targetString):
             evaluateIndividual(individual)[0] > 0
         ), f"targetString: '{targetString}' ({len(targetString)}), individual: '{toolbox.compile(individual)}' ({len(toolbox.compile(individual))})"
 
-    halloffame = deap.tools.HallOfFame(1)
+    hallOfFame = deap.tools.HallOfFame(1)
 
     # stats_fit = deap.tools.Statistics(lambda ind: ind.fitness.values)
     # stats_size = deap.tools.Statistics(len)
@@ -776,7 +776,7 @@ def generatePatternString(targetString):
     for individual, fitness in zip(invalidIndividuals, fitnesses):
         individual.fitness.values = fitness
 
-    halloffame.update(population)
+    hallOfFame.update(population)
 
     # record = stats.compile(population) if stats else {}
     # logbook.record(gen=0, nevals=len(invalid_ind), **record)
@@ -810,7 +810,7 @@ def generatePatternString(targetString):
             individual.fitness.values = fitness
 
         # Update the hall of fame with the generated individuals
-        halloffame.update(offspring)
+        hallOfFame.update(offspring)
 
         # Replace the current population by the offspring
         population[:] = offspring
@@ -821,7 +821,7 @@ def generatePatternString(targetString):
         # if verbose:
         #    print(logbook.stream)
 
-    individualBest = halloffame[0]
+    individualBest = hallOfFame[0]
     patternStringBest = toolbox.compile(individualBest)
 
     nFilesWithMatches = countFilesWithMatches(patternStringBest)
