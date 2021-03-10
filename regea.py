@@ -23,8 +23,8 @@ outputFilenamePatterns = "regea.report.patterns"
 outputFilenameFrequencies = "regea.report.frequencies"
 
 # Evolution parameters
-populationSize = 10000
-nGenerations = 25
+populationSize = 1000
+evolutionTimeout = 60  # seconds
 crossoverProbability = 0.10
 mutationProbability = 0.05
 treeHeightMax = 17
@@ -785,7 +785,10 @@ def generatePatternString(targetString):
     #    print(logbook.stream)
 
     # Begin the generational process
-    for iGeneration in range(1, nGenerations + 1):
+    evolutionTimeStart = time.time()
+    # iGeneration = 1
+
+    while time.time() - evolutionTimeStart < evolutionTimeout:
         # Select the next generation individuals
         offspring = toolbox.select(population, len(population))
 
@@ -824,6 +827,8 @@ def generatePatternString(targetString):
         # logbook.record(gen=iGeneration, nevals=len(invalid_ind), **record)
         # if verbose:
         #    print(logbook.stream)
+
+        # iGeneration += 1
 
     individualBest = copy.deepcopy(hallOfFame[0])
     patternStringBest = toolbox.compile(individualBest)
