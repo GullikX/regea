@@ -752,13 +752,21 @@ def generatePatternString(targetString):
     toolbox.register("population", deap.tools.initRepeat, list, toolbox.individual)
     toolbox.register("evaluate", evaluateIndividual)
 
-    population = toolbox.population(n=populationSize)
-    for individual in population:
-        assert (
-            evaluateIndividual(individual)[0] > 0
-        ), f"targetString: '{targetString}' ({len(targetString)}), individual: '{toolbox.compile(individual)}' ({len(toolbox.compile(individual))})"
+    # Initialize population
+    population = toolbox.population(n=1)
+    population[0].fitness.values = toolbox.evaluate(population[0])
+    assert population[0].fitness.values[0] > 0
+    assert len(set([node.name for node in population[0] if isinstance(node, deap.gp.Primitive)])) == 1
+    assert len(set([node.name for node in population[0] if isinstance(node, deap.gp.Ephemeral)])) == 0
+    assert len(set([node.name for node in population[0] if isinstance(node, deap.gp.Terminal)])) == 1
+    assert len(set([node.name for node in population[0]])) == 2
+
+    population.extend([None] * (populationSize - 1))
+    for iIndividual in range(1, populationSize):
+        population[iIndividual] = copy.deepcopy(population[0])
 
     hallOfFame = deap.tools.HallOfFame(1)
+    hallOfFame.update(population)
 
     # stats_fit = deap.tools.Statistics(lambda ind: ind.fitness.values)
     # stats_size = deap.tools.Statistics(len)
@@ -770,14 +778,6 @@ def generatePatternString(targetString):
 
     # logbook = deap.tools.Logbook()
     # logbook.header = ['gen', 'nevals'] + (stats.fields if stats else [])
-
-    # Evaluate the individuals with an invalid fitness
-    invalidIndividuals = [individual for individual in population if not individual.fitness.valid]
-    fitnesses = toolbox.map(toolbox.evaluate, invalidIndividuals)
-    for individual, fitness in zip(invalidIndividuals, fitnesses):
-        individual.fitness.values = fitness
-
-    hallOfFame.update(population)
 
     # record = stats.compile(population) if stats else {}
     # logbook.record(gen=0, nevals=len(invalid_ind), **record)
