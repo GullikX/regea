@@ -22,11 +22,17 @@ verbose = True
 outputFilenamePatterns = "regea.report.patterns"
 outputFilenameFrequencies = "regea.report.frequencies"
 
-# Evolution parameters
+# Evolution parameters TODO: update values
 populationSize = 1000
 evolutionTimeout = 60  # seconds
 crossoverProbability = 0.10
-mutationProbability = 0.05
+mutUniformProbability = 0.05
+mutNodeReplacementProbability = 0.05
+mutEphemeralAllProbability = 0.05
+mutEphemeralOneProbability = 0.05
+mutInsertProbability = 0.05
+mutShrinkProbability = 0.05
+
 treeHeightMax = 17
 asciiMin = 32
 asciiMax = 126
@@ -740,11 +746,27 @@ def generatePatternString(targetString):
 
         toolbox.register("select", deap.tools.selTournament, tournsize=3)
         toolbox.register("mate", deap.gp.cxOnePoint)
-        toolbox.register("expr_mut", deap.gp.genFull, min_=0, max_=2)
-        toolbox.register("mutate", deap.gp.mutUniform, expr=toolbox.expr_mut, pset=psetMutate)
+        toolbox.register("expr_mutUniform", deap.gp.genHalfAndHalf, min_=0, max_=2)
+        toolbox.register("mutUniform", deap.gp.mutUniform, expr=toolbox.expr_mutUniform, pset=psetMutate)
+        toolbox.register("mutNodeReplacement", deap.gp.mutNodeReplacement, pset=psetMutate)
+        toolbox.register("mutEphemeralAll", deap.gp.mutEphemeral, mode="all")
+        toolbox.register("mutEphemeralOne", deap.gp.mutEphemeral, mode="one")
+        toolbox.register("mutInsert", deap.gp.mutInsert, pset=psetMutate)
+        toolbox.register("mutShrink", deap.gp.mutShrink)
 
         toolbox.decorate("mate", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=treeHeightMax))
-        toolbox.decorate("mutate", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=treeHeightMax))
+        toolbox.decorate("mutUniform", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=treeHeightMax))
+        toolbox.decorate(
+            "mutNodeReplacement", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=treeHeightMax)
+        )
+        toolbox.decorate(
+            "mutEphemeralAll", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=treeHeightMax)
+        )
+        toolbox.decorate(
+            "mutEphemeralOne", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=treeHeightMax)
+        )
+        toolbox.decorate("mutInsert", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=treeHeightMax))
+        toolbox.decorate("mutShrink", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=treeHeightMax))
 
     treeHeightInit = min(int(np.log(len(targetString)) / np.log(Concatenate.arity)), treeHeightMax)
     toolbox.register("expr", deap.gp.genHalfAndHalf, pset=psetInit, min_=treeHeightInit, max_=treeHeightInit)
@@ -801,8 +823,23 @@ def generatePatternString(targetString):
                 del offspringTemp[i - 1].fitness.values, offspringTemp[i].fitness.values
 
         for i in range(len(offspringTemp)):
-            if random.random() < mutationProbability:
-                (offspringTemp[i],) = toolbox.mutate(offspringTemp[i])
+            if random.random() < mutUniformProbability:
+                (offspringTemp[i],) = toolbox.mutUniform(offspringTemp[i])
+                del offspringTemp[i].fitness.values
+            if random.random() < mutNodeReplacementProbability:
+                (offspringTemp[i],) = toolbox.mutNodeReplacement(offspringTemp[i])
+                del offspringTemp[i].fitness.values
+            if random.random() < mutEphemeralAllProbability:
+                (offspringTemp[i],) = toolbox.mutEphemeralAll(offspringTemp[i])
+                del offspringTemp[i].fitness.values
+            if random.random() < mutEphemeralOneProbability:
+                (offspringTemp[i],) = toolbox.mutEphemeralOne(offspringTemp[i])
+                del offspringTemp[i].fitness.values
+            if random.random() < mutInsertProbability:
+                (offspringTemp[i],) = toolbox.mutInsert(offspringTemp[i])
+                del offspringTemp[i].fitness.values
+            if random.random() < mutShrinkProbability:
+                (offspringTemp[i],) = toolbox.mutShrink(offspringTemp[i])
                 del offspringTemp[i].fitness.values
 
         offspring = offspringTemp
