@@ -73,8 +73,9 @@ class IdentityFloat:
     arity = len(argTypes)
     returns = float
 
-    def primitive(left):
-        return left
+    def primitive(*args):
+        assert len(args) == IdentityFloat.arity
+        return args[0]
 
     def fitness(args):
         assert len(args) == IdentityFloat.arity
@@ -86,8 +87,9 @@ class IdentityInt:
     arity = len(argTypes)
     returns = int
 
-    def primitive(left):
-        return left
+    def primitive(*args):
+        assert len(args) == IdentityInt.arity
+        return args[0]
 
     def fitness(args):
         assert len(args) == IdentityInt.arity
@@ -99,8 +101,9 @@ class Concatenate:
     arity = len(argTypes)
     returns = str
 
-    def primitive(left, right):
-        return left + right
+    def primitive(*args):
+        assert len(args) == Concatenate.arity
+        return args[0] + args[1]
 
     def fitness(args):
         assert len(args) == Concatenate.arity
@@ -116,10 +119,11 @@ class Range:
     arity = len(argTypes)
     returns = str
 
-    def primitive(left, right):
-        if left == right:
-            return regex.escape(chr(left))
-        return f"[{regex.escape(chr(min(left, right)))}-{regex.escape(chr(max(left, right)))}]"
+    def primitive(*args):
+        assert len(args) == Range.arity
+        if args[0] == args[1]:
+            return regex.escape(chr(args[0]))
+        return f"[{regex.escape(chr(min(args[0], args[1])))}-{regex.escape(chr(max(args[0], args[1])))}]"
 
     def fitness(args):
         assert len(args) == Range.arity
@@ -131,10 +135,11 @@ class NegatedRange:
     arity = len(argTypes)
     returns = str
 
-    def primitive(left, right):
-        if left == right:
-            return f"[^{regex.escape(chr(left))}\\n\\r]"
-        return f"[^{regex.escape(chr(min(left, right)))}-{regex.escape(chr(max(left, right)))}\\n\\r]"
+    def primitive(*args):
+        assert len(args) == NegatedRange.arity
+        if args[0] == args[1]:
+            return f"[^{regex.escape(chr(args[0]))}\\n\\r]"
+        return f"[^{regex.escape(chr(min(args[0], args[1])))}-{regex.escape(chr(max(args[0], args[1])))}\\n\\r]"
 
     def fitness(args):
         assert len(args) == NegatedRange.arity
@@ -146,205 +151,9 @@ class Set:
     arity = len(argTypes)
     returns = str
 
-    def primitive(
-        c0,
-        c1,
-        c2,
-        c3,
-        c4,
-        c5,
-        c6,
-        c7,
-        c8,
-        c9,
-        c10,
-        c11,
-        c12,
-        c13,
-        c14,
-        c15,
-        c16,
-        c17,
-        c18,
-        c19,
-        c20,
-        c21,
-        c22,
-        c23,
-        c24,
-        c25,
-        c26,
-        c27,
-        c28,
-        c29,
-        c30,
-        c31,
-        c32,
-        c33,
-        c34,
-        c35,
-        c36,
-        c37,
-        c38,
-        c39,
-        c40,
-        c41,
-        c42,
-        c43,
-        c44,
-        c45,
-        c46,
-        c47,
-        c48,
-        c49,
-        c50,
-        c51,
-        c52,
-        c53,
-        c54,
-        c55,
-        c56,
-        c57,
-        c58,
-        c59,
-        c60,
-        c61,
-        c62,
-        c63,
-        c64,
-        c65,
-        c66,
-        c67,
-        c68,
-        c69,
-        c70,
-        c71,
-        c72,
-        c73,
-        c74,
-        c75,
-        c76,
-        c77,
-        c78,
-        c79,
-        c80,
-        c81,
-        c82,
-        c83,
-        c84,
-        c85,
-        c86,
-        c87,
-        c88,
-        c89,
-        c90,
-        c91,
-        c92,
-        c93,
-        c94,
-    ):
-        charactersInSet = list(
-            np.array(
-                (
-                    c0,
-                    c1,
-                    c2,
-                    c3,
-                    c4,
-                    c5,
-                    c6,
-                    c7,
-                    c8,
-                    c9,
-                    c10,
-                    c11,
-                    c12,
-                    c13,
-                    c14,
-                    c15,
-                    c16,
-                    c17,
-                    c18,
-                    c19,
-                    c20,
-                    c21,
-                    c22,
-                    c23,
-                    c24,
-                    c25,
-                    c26,
-                    c27,
-                    c28,
-                    c29,
-                    c30,
-                    c31,
-                    c32,
-                    c33,
-                    c34,
-                    c35,
-                    c36,
-                    c37,
-                    c38,
-                    c39,
-                    c40,
-                    c41,
-                    c42,
-                    c43,
-                    c44,
-                    c45,
-                    c46,
-                    c47,
-                    c48,
-                    c49,
-                    c50,
-                    c51,
-                    c52,
-                    c53,
-                    c54,
-                    c55,
-                    c56,
-                    c57,
-                    c58,
-                    c59,
-                    c60,
-                    c61,
-                    c62,
-                    c63,
-                    c64,
-                    c65,
-                    c66,
-                    c67,
-                    c68,
-                    c69,
-                    c70,
-                    c71,
-                    c72,
-                    c73,
-                    c74,
-                    c75,
-                    c76,
-                    c77,
-                    c78,
-                    c79,
-                    c80,
-                    c81,
-                    c82,
-                    c83,
-                    c84,
-                    c85,
-                    c86,
-                    c87,
-                    c88,
-                    c89,
-                    c90,
-                    c91,
-                    c92,
-                    c93,
-                    c94,
-                )
-            )
-            > 0.5
-        )
+    def primitive(*args):
+        assert len(args) == Set.arity
+        charactersInSet = list(np.array(args) > 0.5)
         assert len(charactersInSet) == nAllowedCharacters
         nCharactersInSet = sum(charactersInSet)
         if nCharactersInSet == 0:
@@ -368,205 +177,9 @@ class NegatedSet:
     arity = len(argTypes)
     returns = str
 
-    def primitive(
-        c0,
-        c1,
-        c2,
-        c3,
-        c4,
-        c5,
-        c6,
-        c7,
-        c8,
-        c9,
-        c10,
-        c11,
-        c12,
-        c13,
-        c14,
-        c15,
-        c16,
-        c17,
-        c18,
-        c19,
-        c20,
-        c21,
-        c22,
-        c23,
-        c24,
-        c25,
-        c26,
-        c27,
-        c28,
-        c29,
-        c30,
-        c31,
-        c32,
-        c33,
-        c34,
-        c35,
-        c36,
-        c37,
-        c38,
-        c39,
-        c40,
-        c41,
-        c42,
-        c43,
-        c44,
-        c45,
-        c46,
-        c47,
-        c48,
-        c49,
-        c50,
-        c51,
-        c52,
-        c53,
-        c54,
-        c55,
-        c56,
-        c57,
-        c58,
-        c59,
-        c60,
-        c61,
-        c62,
-        c63,
-        c64,
-        c65,
-        c66,
-        c67,
-        c68,
-        c69,
-        c70,
-        c71,
-        c72,
-        c73,
-        c74,
-        c75,
-        c76,
-        c77,
-        c78,
-        c79,
-        c80,
-        c81,
-        c82,
-        c83,
-        c84,
-        c85,
-        c86,
-        c87,
-        c88,
-        c89,
-        c90,
-        c91,
-        c92,
-        c93,
-        c94,
-    ):
-        charactersInSet = list(
-            np.array(
-                (
-                    c0,
-                    c1,
-                    c2,
-                    c3,
-                    c4,
-                    c5,
-                    c6,
-                    c7,
-                    c8,
-                    c9,
-                    c10,
-                    c11,
-                    c12,
-                    c13,
-                    c14,
-                    c15,
-                    c16,
-                    c17,
-                    c18,
-                    c19,
-                    c20,
-                    c21,
-                    c22,
-                    c23,
-                    c24,
-                    c25,
-                    c26,
-                    c27,
-                    c28,
-                    c29,
-                    c30,
-                    c31,
-                    c32,
-                    c33,
-                    c34,
-                    c35,
-                    c36,
-                    c37,
-                    c38,
-                    c39,
-                    c40,
-                    c41,
-                    c42,
-                    c43,
-                    c44,
-                    c45,
-                    c46,
-                    c47,
-                    c48,
-                    c49,
-                    c50,
-                    c51,
-                    c52,
-                    c53,
-                    c54,
-                    c55,
-                    c56,
-                    c57,
-                    c58,
-                    c59,
-                    c60,
-                    c61,
-                    c62,
-                    c63,
-                    c64,
-                    c65,
-                    c66,
-                    c67,
-                    c68,
-                    c69,
-                    c70,
-                    c71,
-                    c72,
-                    c73,
-                    c74,
-                    c75,
-                    c76,
-                    c77,
-                    c78,
-                    c79,
-                    c80,
-                    c81,
-                    c82,
-                    c83,
-                    c84,
-                    c85,
-                    c86,
-                    c87,
-                    c88,
-                    c89,
-                    c90,
-                    c91,
-                    c92,
-                    c93,
-                    c94,
-                )
-            )
-            > 0.5
-        )
+    def primitive(*args):
+        assert len(args) == Set.arity
+        charactersInSet = list(np.array(args) > 0.5)
         assert len(charactersInSet) == nAllowedCharacters
         nCharactersInSet = sum(charactersInSet)
         if nCharactersInSet == 0:
