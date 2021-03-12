@@ -25,13 +25,13 @@ outputFilenameFrequencies = "regea.report.frequencies"
 # Evolution parameters TODO: update values
 populationSize = 1000
 evolutionTimeout = 60  # seconds
-crossoverProbability = 0.10
-mutUniformProbability = 0.05
-mutNodeReplacementProbability = 0.05
-mutEphemeralAllProbability = 0.05
-mutEphemeralOneProbability = 0.05
-mutInsertProbability = 0.05
-mutShrinkProbability = 0.05
+crossoverProbability = 0.17896349
+mutUniformProbability = 0.00164105
+mutNodeReplacementProbability = 0.56501573
+mutEphemeralAllProbability = 0.11488764
+mutEphemeralOneProbability = 0.05598081
+mutInsertProbability = 0.15532969
+mutShrinkProbability = 0.45608542
 
 treeHeightMax = 17
 asciiMin = 32
