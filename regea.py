@@ -228,6 +228,16 @@ class RandomFloat:
 
 
 # Genetic programming terminals
+class Empty:
+    returns = str
+
+    def terminal():
+        return ""
+
+    def fitness():
+        return 0
+
+
 class Wildcard:
     returns = str
 
@@ -271,6 +281,7 @@ def generatePatternString(targetString):
     }
 
     terminals = {
+        Empty.__name__: Empty,
         Wildcard.__name__: Wildcard,
         WordBoundary.__name__: WordBoundary,
     }
