@@ -258,6 +258,26 @@ class WordBoundary:
         return 1
 
 
+class WordCharacter:
+    returns = str
+
+    def terminal():
+        return "\\w"
+
+    def fitness():
+        return 1 / (len(string.ascii_letters) + len(string.digits) + 1)
+
+
+class NonWordCharacter:
+    returns = str
+
+    def terminal():
+        return "\\W"
+
+    def fitness():
+        return 1 / (len(string.printable) - (len(string.ascii_letters) + len(string.digits) + 1))
+
+
 # Genetic programming algorithm
 def generatePatternString(targetString):
     global psetInit
@@ -284,6 +304,8 @@ def generatePatternString(targetString):
         Empty.__name__: Empty,
         Wildcard.__name__: Wildcard,
         WordBoundary.__name__: WordBoundary,
+        WordCharacter.__name__: WordCharacter,
+        NonWordCharacter.__name__: NonWordCharacter,
     }
 
     def countFilesWithMatches(patternString):
