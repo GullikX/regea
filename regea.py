@@ -178,7 +178,7 @@ class NegatedSet:
     returns = str
 
     def primitive(*args):
-        assert len(args) == Set.arity
+        assert len(args) == NegatedSet.arity
         charactersInSet = list(np.array(args) > 0.5)
         assert len(charactersInSet) == nAllowedCharacters
         nCharactersInSet = sum(charactersInSet)
@@ -189,7 +189,7 @@ class NegatedSet:
             return f"[^{characters}]"
 
     def fitness(args):
-        assert len(args) == Set.arity
+        assert len(args) == NegatedSet.arity
         try:
             return 1 / (nAllowedCharacters - sum(args))
         except ZeroDivisionError:
