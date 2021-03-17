@@ -196,6 +196,62 @@ class NegatedSet:
             return 0
 
 
+class PositiveLookahead:
+    argTypes = (str,)
+    arity = len(argTypes)
+    returns = str
+
+    def primitive(*args):
+        assert len(args) == PositiveLookahead.arity
+        return f"(?={args[0]})"
+
+    def fitness(args):
+        assert len(args) == PositiveLookahead.arity
+        return 0
+
+
+class PositiveLookbehind:
+    argTypes = (str,)
+    arity = len(argTypes)
+    returns = str
+
+    def primitive(*args):
+        assert len(args) == PositiveLookbehind.arity
+        return f"(?<={args[0]})"
+
+    def fitness(args):
+        assert len(args) == PositiveLookbehind.arity
+        return 0
+
+
+class NegativeLookahead:
+    argTypes = (str,)
+    arity = len(argTypes)
+    returns = str
+
+    def primitive(*args):
+        assert len(args) == NegativeLookahead.arity
+        return f"(?!{args[0]})"
+
+    def fitness(args):
+        assert len(args) == NegativeLookahead.arity
+        return 0
+
+
+class NegativeLookbehind:
+    argTypes = (str,)
+    arity = len(argTypes)
+    returns = str
+
+    def primitive(*args):
+        assert len(args) == NegativeLookbehind.arity
+        return f"(?<!{args[0]})"
+
+    def fitness(args):
+        assert len(args) == NegativeLookbehind.arity
+        return 0
+
+
 # Genetic programming ephemeral constants
 class RandomPrintableAsciiCode:
     returns = int
@@ -292,6 +348,10 @@ def generatePatternString(targetString):
         NegatedRange.__name__: NegatedRange,
         Set.__name__: Set,
         NegatedSet.__name__: NegatedSet,
+        PositiveLookahead.__name__: PositiveLookahead,
+        PositiveLookbehind.__name__: PositiveLookbehind,
+        NegativeLookahead.__name__: NegativeLookahead,
+        NegativeLookbehind.__name__: NegativeLookbehind,
     }
 
     ephemeralConstants = {
