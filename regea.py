@@ -376,6 +376,11 @@ def generatePatternString(targetString):
                 nFilesWithMatches += 1
         return nFilesWithMatches
 
+    def countFileMatches(patternString):
+        pattern = re.compile(patternString, re.MULTILINE)
+        nFileMatches = [len(pattern.findall(fileContentsJoined[iFile])) for iFile in range(len(fileContentsJoined))]
+        return nFileMatches
+
     def evaluateIndividual(individual):
         patternString = toolbox.compile(individual)
 
@@ -392,31 +397,11 @@ def generatePatternString(targetString):
         if match is None:
             return (0.0,)
 
-        baseFitness = 0.0
-
-        for iNode in range(len(individual)):
-            node = individual[iNode]
-            if isinstance(node, deap.gp.Primitive):
-                primitiveSubtree = deap.creator.Individual(individual[individual.searchSubtree(iNode)])
-
-                args = [None] * node.arity
-                iNodeArgument = 1
-                span = slice(0, 0)
-                for iArgument in range(node.arity):
-                    span = primitiveSubtree.searchSubtree(iNodeArgument)
-                    args[iArgument] = toolbox.compile(deap.creator.Individual(primitiveSubtree[span]))
-                    iNodeArgument = span.stop
-                assert span.stop == len(primitiveSubtree)
-
-                baseFitness += primitives[node.name].fitness(args)
-            elif isinstance(node, deap.gp.Ephemeral):
-                baseFitness += ephemeralConstants[node.__class__.__name__].fitness()
-            elif isinstance(node, deap.gp.Terminal):
-                baseFitness += terminals[node.name].fitness()
-            else:
-                raise ValueError(f"Unknown node {node} of type {type(node)}")
-
-        fitness = baseFitness * countFilesWithMatches(pattern.pattern) / len(targetString) / len(fileContentsJoined)
+        fitness = 0.0
+        fileMatches = countFileMatches(pattern.pattern)
+        for iFile in range(len(fileContentsJoined)):
+            if fileMatches[iFile] > 0:
+                fitness += 1 / fileMatches[iFile] / len(fileContentsJoined)
 
         return (fitness,)
 
