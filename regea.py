@@ -11,7 +11,7 @@ from mpi4py import MPI
 import numpy as np
 import operator
 import random
-import regex
+import regex as re
 import string
 import sys
 import time
@@ -36,7 +36,7 @@ mutShrinkProbability = 0.45608542
 treeHeightMax = 17
 asciiMin = 32
 asciiMax = 126
-allowedCharacters = [regex.escape(chr(i)) for i in range(asciiMin, asciiMax + 1)]
+allowedCharacters = [re.escape(chr(i)) for i in range(asciiMin, asciiMax + 1)]
 nAllowedCharacters = len(allowedCharacters)
 
 # OpenMPI parameters
@@ -122,8 +122,8 @@ class Range:
     def primitive(*args):
         assert len(args) == Range.arity
         if args[0] == args[1]:
-            return regex.escape(chr(args[0]))
-        return f"[{regex.escape(chr(min(args[0], args[1])))}-{regex.escape(chr(max(args[0], args[1])))}]"
+            return re.escape(chr(args[0]))
+        return f"[{re.escape(chr(min(args[0], args[1])))}-{re.escape(chr(max(args[0], args[1])))}]"
 
     def fitness(args):
         assert len(args) == Range.arity
@@ -138,8 +138,8 @@ class NegatedRange:
     def primitive(*args):
         assert len(args) == NegatedRange.arity
         if args[0] == args[1]:
-            return f"[^{regex.escape(chr(args[0]))}\\n\\r]"
-        return f"[^{regex.escape(chr(min(args[0], args[1])))}-{regex.escape(chr(max(args[0], args[1])))}\\n\\r]"
+            return f"[^{re.escape(chr(args[0]))}\\n\\r]"
+        return f"[^{re.escape(chr(min(args[0], args[1])))}-{re.escape(chr(max(args[0], args[1])))}\\n\\r]"
 
     def fitness(args):
         assert len(args) == NegatedRange.arity
@@ -267,7 +267,7 @@ class RandomCharacter:
     returns = str
 
     def ephemeralConstant():
-        return regex.escape(chr(random.randint(asciiMin, asciiMax)))
+        return re.escape(chr(random.randint(asciiMin, asciiMax)))
 
     def fitness():
         return 1
@@ -369,7 +369,7 @@ def generatePatternString(targetString):
     }
 
     def countFilesWithMatches(patternString):
-        pattern = regex.compile(patternString, regex.MULTILINE)
+        pattern = re.compile(patternString, re.MULTILINE)
         nFilesWithMatches = 0
         for iFile in range(len(fileContentsJoined)):
             if pattern.search(fileContentsJoined[iFile]) is not None:
@@ -384,7 +384,7 @@ def generatePatternString(targetString):
             return (0.0,)
 
         try:
-            pattern = regex.compile(patternString, regex.MULTILINE)
+            pattern = re.compile(patternString, re.MULTILINE)
         except:
             print(f"Failed to compile pattern '{patternString}'")
             sys.exit(1)
@@ -581,13 +581,13 @@ def generatePatternString(targetString):
     # Pad beginning
     padMin = 0
     while (
-        regex.compile(f".{{{padMin + 1}}}" + patternStringBest, regex.MULTILINE).search(targetString) is not None
+        re.compile(f".{{{padMin + 1}}}" + patternStringBest, re.MULTILINE).search(targetString) is not None
         and countFilesWithMatches(f".{{{padMin + 1}}}" + patternStringBest) == nFilesWithMatches
     ):
         padMin += 1
     padMax = padMin
     while (
-        regex.compile(f"^.{{{padMin},{padMax}}}" + patternStringBest, regex.MULTILINE).search(targetString) is None
+        re.compile(f"^.{{{padMin},{padMax}}}" + patternStringBest, re.MULTILINE).search(targetString) is None
         or countFilesWithMatches(f"^.{{{padMin},{padMax}}}" + patternStringBest) < nFilesWithMatches
     ):
         padMax += 1
@@ -601,13 +601,13 @@ def generatePatternString(targetString):
     # Pad end
     padMin = 0
     while (
-        regex.compile(patternStringBest + f".{{{padMin + 1}}}", regex.MULTILINE).search(targetString) is not None
+        re.compile(patternStringBest + f".{{{padMin + 1}}}", re.MULTILINE).search(targetString) is not None
         and countFilesWithMatches(patternStringBest + f".{{{padMin + 1}}}") == nFilesWithMatches
     ):
         padMin += 1
     padMax = padMin
     while (
-        regex.compile(patternStringBest + f".{{{padMin},{padMax}}}$", regex.MULTILINE).search(targetString) is None
+        re.compile(patternStringBest + f".{{{padMin},{padMax}}}$", re.MULTILINE).search(targetString) is None
         or countFilesWithMatches(patternStringBest + f".{{{padMin},{padMax}}}$") < nFilesWithMatches
     ):
         padMax += 1
@@ -618,7 +618,7 @@ def generatePatternString(targetString):
             patternStringBest += f".{{{padMin}}}"
     patternStringBest += "$"
 
-    assert regex.compile(patternStringBest, regex.MULTILINE).search(targetString) is not None
+    assert re.compile(patternStringBest, re.MULTILINE).search(targetString) is not None
     assert evaluateIndividual(individualBest)
     assert countFilesWithMatches(patternStringBest) == nFilesWithMatches
     assert patternStringBest.startswith("^")
@@ -663,8 +663,8 @@ def main(argv):
             linesCurrent[iFile] = fileContentsSplitSorted[iFile][indices[iFile]]
         while True:
             if linesCurrent.count(linesCurrent[0]) == len(linesCurrent):
-                patternString = f"^{regex.escape(linesCurrent[0])}$"
-                patterns[patternString] = regex.compile(patternString, regex.MULTILINE)
+                patternString = f"^{re.escape(linesCurrent[0])}$"
+                patterns[patternString] = re.compile(patternString, re.MULTILINE)
             iLineMin = argmin(linesCurrent)
             indices[iLineMin] += 1
             try:
@@ -742,7 +742,7 @@ def main(argv):
                                 f"[{time.time() - timeStart:.3f}] Generating pattern to match string: '{targetString}'"
                             )
                     comm.send(iLine, dest=status.source, tag=mpiTagLineIndex)
-                    patterns[patternString] = regex.compile(patternString, regex.MULTILINE)
+                    patterns[patternString] = re.compile(patternString, re.MULTILINE)
             iLine += 1
     else:
         while True:
