@@ -23,7 +23,7 @@ outputFilenamePatterns = "regea.report.patterns"
 outputFilenameFrequencies = "regea.report.frequencies"
 
 # Evolution parameters TODO: update values
-populationSize = 1000
+populationSize = 10
 evolutionTimeout = 60  # seconds
 crossoverProbability = 0.17896349
 mutUniformProbability = 0.00164105
@@ -110,8 +110,13 @@ class Concatenate:
         return 0
 
 
-# def optional(left):
-#    return left if left.endswith("?") else f"{left}?"
+class Optional:
+    argTypes = (str,)
+    arity = len(argTypes)
+    returns = str
+
+    def primitive(*args):
+        return args[0] if args[0].endswith("?") else f"{args[0]}?"
 
 
 class Range:
@@ -328,10 +333,21 @@ class NonWordCharacter:
     returns = str
 
     def terminal():
-        return "\\W"
+        return "[^\\w\\n\\r]"
 
-    def fitness():
-        return 1 / (len(string.printable) - (len(string.ascii_letters) + len(string.digits) + 1))
+
+class Whitespace:
+    returns = str
+
+    def terminal():
+        return "\\s"
+
+
+class NonWhitespace:
+    returns = str
+
+    def terminal():
+        return "[^\\s\\n\\r]"
 
 
 # Genetic programming algorithm
@@ -344,6 +360,7 @@ def generatePatternString(targetString):
         IdentityFloat.__name__: IdentityFloat,
         IdentityInt.__name__: IdentityInt,
         Concatenate.__name__: Concatenate,
+        Optional.__name__: Optional,
         Range.__name__: Range,
         NegatedRange.__name__: NegatedRange,
         Set.__name__: Set,
@@ -366,39 +383,38 @@ def generatePatternString(targetString):
         WordBoundary.__name__: WordBoundary,
         WordCharacter.__name__: WordCharacter,
         NonWordCharacter.__name__: NonWordCharacter,
+        Whitespace.__name__: Whitespace,
+        NonWhitespace.__name__: NonWhitespace,
     }
 
-    def countFilesWithMatches(patternString):
-        pattern = re.compile(patternString, re.MULTILINE)
+    def countFilesWithMatches(pattern):
+        if isinstance(pattern, str):
+            pattern = re.compile(pattern, re.MULTILINE)
         nFilesWithMatches = 0
         for iFile in range(len(fileContentsJoined)):
             if pattern.search(fileContentsJoined[iFile]) is not None:
                 nFilesWithMatches += 1
         return nFilesWithMatches
 
-    def countFileMatches(patternString):
-        pattern = re.compile(patternString, re.MULTILINE)
+    def countFileMatches(pattern):
+        if isinstance(pattern, str):
+            pattern = re.compile(pattern, re.MULTILINE)
         nFileMatches = [len(pattern.findall(fileContentsJoined[iFile])) for iFile in range(len(fileContentsJoined))]
         return nFileMatches
 
     def evaluateIndividual(individual):
         patternString = toolbox.compile(individual)
 
-        # TODO: prevent double word boundaries from being created
-        if "\\b\\b" in patternString:
-            return (0.0,)
-
         try:
             pattern = re.compile(patternString, re.MULTILINE)
         except:
-            print(f"Failed to compile pattern '{patternString}'")
-            sys.exit(1)
+            return (0.0,)
         match = pattern.search(targetString)
         if match is None:
             return (0.0,)
 
         fitness = 0.0
-        fileMatches = countFileMatches(pattern.pattern)
+        fileMatches = countFileMatches(pattern)
         for iFile in range(len(fileContentsJoined)):
             if fileMatches[iFile] > 0:
                 fitness += 1 / fileMatches[iFile] / len(fileContentsJoined)
