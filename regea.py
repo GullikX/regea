@@ -34,6 +34,7 @@ mutInsertProbability = 0.15532969
 mutShrinkProbability = 0.45608542
 
 treeHeightMax = 17
+treeHeightMaxInit = 8
 asciiMin = 32
 asciiMax = 126
 allowedCharacters = [re.escape(chr(i)) for i in range(asciiMin, asciiMax + 1)]
@@ -475,7 +476,7 @@ def generatePatternString(targetString):
         toolbox.decorate("mutInsert", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=treeHeightMax))
         toolbox.decorate("mutShrink", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=treeHeightMax))
 
-    treeHeightInit = min(int(np.log(len(targetString)) / np.log(Concatenate.arity)), treeHeightMax)
+    treeHeightInit = min(int(np.log(len(targetString)) / np.log(Concatenate.arity)), treeHeightMaxInit)
     toolbox.register("expr", deap.gp.genHalfAndHalf, pset=psetInit, min_=treeHeightInit, max_=treeHeightInit)
     toolbox.register("individual", deap.tools.initIterate, deap.creator.Individual, toolbox.expr)
     toolbox.register("population", deap.tools.initRepeat, list, toolbox.individual)
