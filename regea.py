@@ -340,14 +340,14 @@ class Whitespace:
     returns = str
 
     def terminal():
-        return "\\s"
+        return "[^\\S\\n\\r]"
 
 
 class NonWhitespace:
     returns = str
 
     def terminal():
-        return "[^\\s\\n\\r]"
+        return "\\S"
 
 
 # Genetic programming algorithm
