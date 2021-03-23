@@ -320,6 +320,26 @@ class WordBoundary:
         return 1
 
 
+class WordBeginning:
+    returns = str
+
+    def terminal():
+        return "(?:\\b(?=\\w))"
+
+    def fitness():
+        return 1
+
+
+class WordEnd:
+    returns = str
+
+    def terminal():
+        return "(?:(?<=\\w)\\b)"
+
+    def fitness():
+        return 1
+
+
 class WordCharacter:
     returns = str
 
@@ -382,6 +402,8 @@ def generatePatternString(targetString):
         Empty.__name__: Empty,
         Wildcard.__name__: Wildcard,
         WordBoundary.__name__: WordBoundary,
+        WordBeginning.__name__: WordBeginning,
+        WordEnd.__name__: WordEnd,
         WordCharacter.__name__: WordCharacter,
         NonWordCharacter.__name__: NonWordCharacter,
         Whitespace.__name__: Whitespace,
