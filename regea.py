@@ -23,8 +23,10 @@ import time
 verbose = True
 outputFilenamePatterns = "regea.report.patterns"
 outputFilenameFrequencies = "regea.report.frequencies"
-grepCheckMatchCmd = ["rg", "--pcre2", "--quiet", "--"]
-grepCountMatchesCmd = ["rg", "--pcre2", "--count", "--no-filename", "--include-zero", "--"]
+grepBinary = "rg"
+grepVersionCmd = [grepBinary, "--version"]
+grepCheckMatchCmd = [grepBinary, "--pcre2", "--quiet", "--"]
+grepCountMatchesCmd = [grepBinary, "--pcre2", "--count", "--no-filename", "--include-zero", "--"]
 
 # Evolution parameters TODO: update values
 populationSize = 10
@@ -680,6 +682,15 @@ def main(argv):
 
     if len(argv) < 2:
         print(f"usage: {argv[0]} FILE1...")
+        return 1
+
+    try:
+        subprocess.check_call(grepVersionCmd, stdout=subprocess.DEVNULL)
+    except FileNotFoundError:
+        print(f"Error: binary '{grepBinary}' not found in PATH")
+        return 1
+    except subprocess.CalledProcessError:
+        print(f"Error when running command '{' '.join(grepVersionCmd)}'")
         return 1
 
     inputFiles.extend(argv[1:])
