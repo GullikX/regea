@@ -21,12 +21,15 @@ import time
 
 # General parameters
 verbose = True
+
 outputFilenamePatterns = "regea.report.patterns"
 outputFilenameFrequencies = "regea.report.frequencies"
-grepBinary = "rg"
-grepVersionCmd = [grepBinary, "--version"]
-grepCheckMatchCmd = [grepBinary, "--pcre2", "--quiet", "--"]
-grepCountMatchesCmd = [grepBinary, "--pcre2", "--count", "--no-filename", "--include-zero", "--"]
+
+grepCmd = ["rg", "--pcre2"]
+grepVersionCmd = grepCmd + ["--version"]
+grepCheckMatchCmd = grepCmd + ["--quiet", "--"]
+grepCountMatchesCmd = grepCmd + ["--count", "--no-filename", "--include-zero", "--"]
+grepCheckMatchBatchSize = 256  # reduce if you get 'regex pattern to large' errors
 
 # Evolution parameters TODO: update values
 populationSize = 10
@@ -78,7 +81,7 @@ def argmax(iterable):
     return max(range(len(iterable)), key=iterable.__getitem__)
 
 
-def checkMatch(patternString, inputString):
+def checkMatch(patternString, inputString, printErrors=False):
     process = subprocess.Popen(
         grepCheckMatchCmd + [patternString],
         stdin=subprocess.PIPE,
@@ -86,7 +89,22 @@ def checkMatch(patternString, inputString):
         stderr=subprocess.PIPE,
     )
     output = process.communicate(inputString.encode())
+    if printErrors and output[Stream.STDERR]:
+        print(output[Stream.STDERR].decode().rstrip("\n"))
     return process.returncode == 0
+
+
+def checkMatchMultiplePatterns(patternStrings, inputString):
+    iPattern = 0
+    while iPattern < len(patternStrings):
+        if checkMatch(
+            f"(?:{'|'.join(list(patternStrings)[iPattern:iPattern + grepCheckMatchBatchSize])})",
+            inputString,
+            printErrors=True,
+        ):
+            return True
+        iPattern += grepCheckMatchBatchSize
+    return False
 
 
 def countFileMatches(patternString, filenames):
@@ -678,10 +696,7 @@ def main(argv):
                     comm.send(None, dest=iNode, tag=mpiTagLineIndex)
                     break
 
-                for pattern in patterns:
-                    if targetString is not None and checkMatch(pattern, targetString):
-                        break
-                else:
+                if not targetString or not checkMatchMultiplePatterns(patterns, targetString):
                     print(f"[{time.time() - timeStart:.3f}] Generating pattern to match string: '{targetString}'")
                     comm.send(iLine, dest=iNode, tag=mpiTagLineIndex)
                     iLine += 1
@@ -703,10 +718,7 @@ def main(argv):
             except IndexError:
                 targetString = None
 
-            for pattern in patterns:
-                if targetString is not None and checkMatch(pattern, targetString):
-                    break
-            else:
+            if not targetString or not checkMatchMultiplePatterns(patterns, targetString):
                 status = MPI.Status()
                 pattern = comm.recv(source=MPI.ANY_SOURCE, tag=mpiTagRegexPattern, status=status)
                 if pattern is None:
