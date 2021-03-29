@@ -557,7 +557,7 @@ def generatePatternString(targetString):
 
     # Begin the generational process
     evolutionTimeStart = time.time()
-    iGeneration = 1
+    # iGeneration = 1
 
     while time.time() - evolutionTimeStart < evolutionTimeout:
         # Select the next generation individuals
@@ -614,14 +614,14 @@ def generatePatternString(targetString):
         # if verbose:
         #    print(logbook.stream)
 
-        iGeneration += 1
+        # iGeneration += 1
 
     individualBest = copy.deepcopy(hallOfFame[0])
     patternStringBest = toolbox.compile(individualBest)
 
-    print(
-        f"Generated pattern '{patternStringBest}', fileMatches: {countFileMatches(patternStringBest, inputFiles)}, nGenerations: {iGeneration}, fitness: {evaluateIndividual(individualBest)[0]}"
-    )
+    # print(
+    #    f"Generated pattern '{patternStringBest}', fileMatches: {countFileMatches(patternStringBest, inputFiles)}, nGenerations: {iGeneration}, fitness: {evaluateIndividual(individualBest)[0]}"
+    # )
 
     nFilesWithMatches = countFilesWithMatches(patternStringBest, inputFiles)
 
