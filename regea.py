@@ -117,10 +117,6 @@ class IdentityFloat:
         assert len(args) == IdentityFloat.arity
         return args[0]
 
-    def fitness(args):
-        assert len(args) == IdentityFloat.arity
-        return 0
-
 
 class IdentityInt:
     argTypes = (int,)
@@ -131,10 +127,6 @@ class IdentityInt:
         assert len(args) == IdentityInt.arity
         return args[0]
 
-    def fitness(args):
-        assert len(args) == IdentityInt.arity
-        return 0
-
 
 class Concatenate:
     argTypes = (str, str)
@@ -144,10 +136,6 @@ class Concatenate:
     def primitive(*args):
         assert len(args) == Concatenate.arity
         return args[0] + args[1]
-
-    def fitness(args):
-        assert len(args) == Concatenate.arity
-        return 0
 
 
 class Optional:
@@ -170,10 +158,6 @@ class Range:
             return re.escape(chr(args[0]))
         return f"[{re.escape(chr(min(args[0], args[1])))}-{re.escape(chr(max(args[0], args[1])))}]"
 
-    def fitness(args):
-        assert len(args) == Range.arity
-        return 1 / (abs(args[0] - args[1]) + 1)
-
 
 class NegatedRange:
     argTypes = (int, int)
@@ -185,10 +169,6 @@ class NegatedRange:
         if args[0] == args[1]:
             return f"[^{re.escape(chr(args[0]))}\\n\\r]"
         return f"[^{re.escape(chr(min(args[0], args[1])))}-{re.escape(chr(max(args[0], args[1])))}\\n\\r]"
-
-    def fitness(args):
-        assert len(args) == NegatedRange.arity
-        return 1 / (len(string.printable) - abs(args[0] - args[1]))
 
 
 class Set:
@@ -209,13 +189,6 @@ class Set:
             characters = "".join([allowedCharacters[i] for i in range(nAllowedCharacters) if charactersInSet[i]])
             return f"[{characters}]"
 
-    def fitness(args):
-        assert len(args) == Set.arity
-        try:
-            return 1 / sum(args)
-        except ZeroDivisionError:
-            return 0
-
 
 class NegatedSet:
     argTypes = (float,) * nAllowedCharacters  # TODO: bool input
@@ -233,13 +206,6 @@ class NegatedSet:
             characters = "".join([allowedCharacters[i] for i in range(nAllowedCharacters) if charactersInSet[i]])
             return f"[^{characters}]"
 
-    def fitness(args):
-        assert len(args) == NegatedSet.arity
-        try:
-            return 1 / (nAllowedCharacters - sum(args))
-        except ZeroDivisionError:
-            return 0
-
 
 class PositiveLookahead:
     argTypes = (str,)
@@ -249,10 +215,6 @@ class PositiveLookahead:
     def primitive(*args):
         assert len(args) == PositiveLookahead.arity
         return f"(?={args[0]})"
-
-    def fitness(args):
-        assert len(args) == PositiveLookahead.arity
-        return 0
 
 
 class PositiveLookbehind:
@@ -264,10 +226,6 @@ class PositiveLookbehind:
         assert len(args) == PositiveLookbehind.arity
         return f"(?<={args[0]})"
 
-    def fitness(args):
-        assert len(args) == PositiveLookbehind.arity
-        return 0
-
 
 class NegativeLookahead:
     argTypes = (str,)
@@ -277,10 +235,6 @@ class NegativeLookahead:
     def primitive(*args):
         assert len(args) == NegativeLookahead.arity
         return f"(?!{args[0]})"
-
-    def fitness(args):
-        assert len(args) == NegativeLookahead.arity
-        return 0
 
 
 class NegativeLookbehind:
@@ -292,10 +246,6 @@ class NegativeLookbehind:
         assert len(args) == NegativeLookbehind.arity
         return f"(?<!{args[0]})"
 
-    def fitness(args):
-        assert len(args) == NegativeLookbehind.arity
-        return 0
-
 
 # Genetic programming ephemeral constants
 class RandomPrintableAsciiCode:
@@ -304,9 +254,6 @@ class RandomPrintableAsciiCode:
     def ephemeralConstant():
         return random.randint(asciiMin, asciiMax)
 
-    def fitness():
-        return 0
-
 
 class RandomCharacter:
     returns = str
@@ -314,18 +261,12 @@ class RandomCharacter:
     def ephemeralConstant():
         return re.escape(chr(random.randint(asciiMin, asciiMax)))
 
-    def fitness():
-        return 1
-
 
 class RandomFloat:
     returns = float
 
     def ephemeralConstant():
         return random.random()
-
-    def fitness():
-        return 0
 
 
 # Genetic programming terminals
@@ -335,18 +276,12 @@ class Empty:
     def terminal():
         return ""
 
-    def fitness():
-        return 0
-
 
 class Wildcard:
     returns = str
 
     def terminal():
         return "."
-
-    def fitness():
-        return 1 / len(string.printable)
 
 
 class WordBoundary:
@@ -355,18 +290,12 @@ class WordBoundary:
     def terminal():
         return "\\b"
 
-    def fitness():
-        return 1
-
 
 class WordBeginning:
     returns = str
 
     def terminal():
         return "(?:\\b(?=\\w))"
-
-    def fitness():
-        return 1
 
 
 class WordEnd:
@@ -375,18 +304,12 @@ class WordEnd:
     def terminal():
         return "(?:(?<=\\w)\\b)"
 
-    def fitness():
-        return 1
-
 
 class WordCharacter:
     returns = str
 
     def terminal():
         return "\\w"
-
-    def fitness():
-        return 1 / (len(string.ascii_letters) + len(string.digits) + 1)
 
 
 class NonWordCharacter:
