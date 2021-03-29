@@ -7,12 +7,14 @@ import deap.base
 import deap.creator
 import deap.gp
 import deap.tools
+import enum
 from mpi4py import MPI
 import numpy as np
 import operator
 import random
-import regex as re
+import re
 import string
+import subprocess
 import sys
 import time
 
@@ -21,6 +23,8 @@ import time
 verbose = True
 outputFilenamePatterns = "regea.report.patterns"
 outputFilenameFrequencies = "regea.report.frequencies"
+grepCheckMatchCmd = ["rg", "--pcre2", "--quiet", "--"]
+grepCountMatchesCmd = ["rg", "--pcre2", "--count", "--no-filename", "--include-zero", "--"]
 
 # Evolution parameters TODO: update values
 populationSize = 10
@@ -50,13 +54,17 @@ mpiTagRegexPattern = 5678
 nWorkerNodes = size - 1
 
 # Global variables
-fileContentsSplit = []
-fileContentsSplitConcatenated = []
-fileContentsJoined = []
+inputFiles = []
 psetInit = None
 psetMutate = None
 toolbox = None
 timeStart = time.time()
+
+
+# Enums
+class Stream(enum.IntEnum):
+    STDOUT = 0
+    STDERR = 1
 
 
 # Util functions
@@ -66,6 +74,35 @@ def argmin(iterable):
 
 def argmax(iterable):
     return max(range(len(iterable)), key=iterable.__getitem__)
+
+
+def checkMatch(patternString, inputString):
+    process = subprocess.Popen(
+        grepCheckMatchCmd + [patternString],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    output = process.communicate(inputString.encode())
+    return process.returncode == 0
+
+
+def countFileMatches(patternString, filenames):
+    assert len(filenames) > 0
+    process = subprocess.Popen(
+        grepCountMatchesCmd + [patternString] + filenames,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    output = process.communicate()
+    assert len(output[Stream.STDERR]) == 0, f"{output[Stream.STDERR].decode()}"
+    nMatches = [int(count) for count in output[Stream.STDOUT].splitlines()]
+    return nMatches
+
+
+def countFilesWithMatches(patternString, filenames):
+    nMatches = countFileMatches(patternString, filenames)
+    return sum([bool(count) for count in nMatches])
 
 
 # Genetic programming primitives
@@ -410,37 +447,17 @@ def generatePatternString(targetString):
         NonWhitespace.__name__: NonWhitespace,
     }
 
-    def countFilesWithMatches(pattern):
-        if isinstance(pattern, str):
-            pattern = re.compile(pattern, re.MULTILINE)
-        nFilesWithMatches = 0
-        for iFile in range(len(fileContentsJoined)):
-            if pattern.search(fileContentsJoined[iFile]) is not None:
-                nFilesWithMatches += 1
-        return nFilesWithMatches
-
-    def countFileMatches(pattern):
-        if isinstance(pattern, str):
-            pattern = re.compile(pattern, re.MULTILINE)
-        nFileMatches = [len(pattern.findall(fileContentsJoined[iFile])) for iFile in range(len(fileContentsJoined))]
-        return nFileMatches
-
     def evaluateIndividual(individual):
         patternString = toolbox.compile(individual)
 
-        try:
-            pattern = re.compile(patternString, re.MULTILINE)
-        except:
-            return (0.0,)
-        match = pattern.search(targetString)
-        if match is None:
+        if not checkMatch(patternString, targetString):
             return (0.0,)
 
         fitness = 0.0
-        fileMatches = countFileMatches(pattern)
-        for iFile in range(len(fileContentsJoined)):
+        fileMatches = countFileMatches(patternString, inputFiles)
+        for iFile in range(len(inputFiles)):
             if fileMatches[iFile] > 0:
-                fitness += 1 / fileMatches[iFile] / len(fileContentsJoined)
+                fitness += 1 / fileMatches[iFile] / len(inputFiles)
 
         return (fitness,)
 
@@ -538,7 +555,7 @@ def generatePatternString(targetString):
 
     # Begin the generational process
     evolutionTimeStart = time.time()
-    # iGeneration = 1
+    iGeneration = 1
 
     while time.time() - evolutionTimeStart < evolutionTimeout:
         # Select the next generation individuals
@@ -595,24 +612,28 @@ def generatePatternString(targetString):
         # if verbose:
         #    print(logbook.stream)
 
-        # iGeneration += 1
+        iGeneration += 1
 
     individualBest = copy.deepcopy(hallOfFame[0])
     patternStringBest = toolbox.compile(individualBest)
 
-    nFilesWithMatches = countFilesWithMatches(patternStringBest)
+    print(
+        f"Generated pattern '{patternStringBest}', fileMatches: {countFileMatches(patternStringBest, inputFiles)}, nGenerations: {iGeneration}, fitness: {evaluateIndividual(individualBest)[0]}"
+    )
+
+    nFilesWithMatches = countFilesWithMatches(patternStringBest, inputFiles)
 
     # Pad beginning
     padMin = 0
     while (
-        re.compile(f".{{{padMin + 1}}}" + patternStringBest, re.MULTILINE).search(targetString) is not None
-        and countFilesWithMatches(f".{{{padMin + 1}}}" + patternStringBest) == nFilesWithMatches
+        checkMatch(f".{{{padMin + 1}}}" + patternStringBest, targetString)
+        and countFilesWithMatches(f".{{{padMin + 1}}}" + patternStringBest, inputFiles) == nFilesWithMatches
     ):
         padMin += 1
     padMax = padMin
     while (
-        re.compile(f"^.{{{padMin},{padMax}}}" + patternStringBest, re.MULTILINE).search(targetString) is None
-        or countFilesWithMatches(f"^.{{{padMin},{padMax}}}" + patternStringBest) < nFilesWithMatches
+        not checkMatch(f"^.{{{padMin},{padMax}}}" + patternStringBest, targetString)
+        or countFilesWithMatches(f"^.{{{padMin},{padMax}}}" + patternStringBest, inputFiles) < nFilesWithMatches
     ):
         padMax += 1
     if padMax > 0:
@@ -625,14 +646,14 @@ def generatePatternString(targetString):
     # Pad end
     padMin = 0
     while (
-        re.compile(patternStringBest + f".{{{padMin + 1}}}", re.MULTILINE).search(targetString) is not None
-        and countFilesWithMatches(patternStringBest + f".{{{padMin + 1}}}") == nFilesWithMatches
+        checkMatch(patternStringBest + f".{{{padMin + 1}}}", targetString)
+        and countFilesWithMatches(patternStringBest + f".{{{padMin + 1}}}", inputFiles) == nFilesWithMatches
     ):
         padMin += 1
     padMax = padMin
     while (
-        re.compile(patternStringBest + f".{{{padMin},{padMax}}}$", re.MULTILINE).search(targetString) is None
-        or countFilesWithMatches(patternStringBest + f".{{{padMin},{padMax}}}$") < nFilesWithMatches
+        not checkMatch(patternStringBest + f".{{{padMin},{padMax}}}$", targetString)
+        or countFilesWithMatches(patternStringBest + f".{{{padMin},{padMax}}}$", inputFiles) < nFilesWithMatches
     ):
         padMax += 1
     if padMax > 0:
@@ -642,9 +663,9 @@ def generatePatternString(targetString):
             patternStringBest += f".{{{padMin}}}"
     patternStringBest += "$"
 
-    assert re.compile(patternStringBest, re.MULTILINE).search(targetString) is not None
+    assert checkMatch(patternStringBest, targetString)
     assert evaluateIndividual(individualBest)
-    assert countFilesWithMatches(patternStringBest) == nFilesWithMatches
+    assert countFilesWithMatches(patternStringBest, inputFiles) == nFilesWithMatches
     assert patternStringBest.startswith("^")
     assert patternStringBest.endswith("$")
 
@@ -661,48 +682,56 @@ def main(argv):
         print(f"usage: {argv[0]} FILE1...")
         return 1
 
-    inputFiles = argv[1:]
+    inputFiles.extend(argv[1:])
     nInputFiles = len(inputFiles)
 
     # Load input files
     if rank == 0:
-        fileContentsSplit = [None] * nInputFiles
+        print(f"[{time.time() - timeStart:.3f}] Loading input files...")
+        fileContents = [None] * nInputFiles
         nLines = 0
-        patterns = {}
+        patterns = set()
 
         for iFile in range(nInputFiles):
             with open(inputFiles[iFile], "r") as f:
-                fileContentsSplit[iFile] = f.read().splitlines()
-            fileContentsSplit[iFile] = list(filter(None, fileContentsSplit[iFile]))
-            random.shuffle(fileContentsSplit[iFile])
-            nLines += len(fileContentsSplit[iFile])
+                fileContents[iFile] = f.read().splitlines()
+            fileContents[iFile] = list(filter(None, fileContents[iFile]))
+            random.shuffle(fileContents[iFile])
+            nLines += len(fileContents[iFile])
+
+        fileContentsConcatenated = []
+        for iFile in range(nInputFiles):
+            fileContentsConcatenated.extend(fileContents[iFile])
 
         # Check for duplicate lines
-        fileContentsSplitSorted = [None] * len(fileContentsSplit)
+        print(f"[{time.time() - timeStart:.3f}] Checking for duplicate lines...")
+        fileContentsSorted = [None] * len(fileContents)
         for iFile in range(nInputFiles):
-            fileContentsSplitSorted[iFile] = sorted(fileContentsSplit[iFile])
-        indices = [0] * len(fileContentsSplitSorted)
+            fileContentsSorted[iFile] = sorted(fileContents[iFile])
+        indices = [0] * len(fileContentsSorted)
         linesCurrent = [None] * nInputFiles
         for iFile in range(nInputFiles):
-            linesCurrent[iFile] = fileContentsSplitSorted[iFile][indices[iFile]]
+            linesCurrent[iFile] = fileContentsSorted[iFile][indices[iFile]]
         while True:
             if linesCurrent.count(linesCurrent[0]) == len(linesCurrent):
-                patternString = f"^{re.escape(linesCurrent[0])}$"
-                patterns[patternString] = re.compile(patternString, re.MULTILINE)
+                patterns.add(f"^{re.escape(linesCurrent[0])}$")
             iLineMin = argmin(linesCurrent)
             indices[iLineMin] += 1
             try:
-                linesCurrent[iLineMin] = fileContentsSplitSorted[iLineMin][indices[iLineMin]]
+                linesCurrent[iLineMin] = fileContentsSorted[iLineMin][indices[iLineMin]]
             except IndexError:
                 break
-    else:
-        fileContentsSplit = None
-    fileContentsSplit = comm.bcast(fileContentsSplit, root=0)
 
-    fileContentsJoined.extend([None] * nInputFiles)
-    for iFile in range(nInputFiles):
-        fileContentsSplitConcatenated.extend(fileContentsSplit[iFile])
-        fileContentsJoined[iFile] = "\n".join(fileContentsSplit[iFile])
+        # Sanity check
+        for pattern in patterns:
+            nMatches = countFilesWithMatches(pattern, inputFiles)
+            assert (
+                nMatches == nInputFiles
+            ), f"Input file corruption detected! Try running 'dos2unix' on the input files and try again. (regex pattern '{pattern}' should match all input files)"
+    else:
+        fileContentsConcatenated = None
+
+    fileContentsConcatenated = comm.bcast(fileContentsConcatenated, root=0)
 
     # Generate regex patterns using EA
     if rank == 0:
@@ -710,17 +739,13 @@ def main(argv):
         for iNode in range(1, size):
             while True:
                 try:
-                    targetString = fileContentsSplitConcatenated[iLine]
+                    targetString = fileContentsConcatenated[iLine]
                 except IndexError:
                     comm.send(None, dest=iNode, tag=mpiTagLineIndex)
                     break
 
-                for patternString in patterns:
-                    try:
-                        match = patterns[patternString].search(targetString)
-                    except TypeError:
-                        match = None
-                    if match is not None:
+                for pattern in patterns:
+                    if targetString is not None and checkMatch(pattern, targetString):
                         break
                 else:
                     print(f"[{time.time() - timeStart:.3f}] Generating pattern to match string: '{targetString}'")
@@ -731,7 +756,7 @@ def main(argv):
 
         iNodesFinished = [False] * nWorkerNodes
         while True:
-            if iLine < len(fileContentsSplitConcatenated):
+            if iLine < len(fileContentsConcatenated):
                 print(
                     f"[{time.time() - timeStart:.3f}] Progress: {100 * (iLine) / nLines:.2f}% ({(iLine + 1)}/{nLines})"
                 )
@@ -740,63 +765,59 @@ def main(argv):
                     f"[{time.time() - timeStart:.3f}] Waiting for {nWorkerNodes - sum(iNodesFinished)} worker nodes to finish..."
                 )
             try:
-                targetString = fileContentsSplitConcatenated[iLine]
+                targetString = fileContentsConcatenated[iLine]
             except IndexError:
                 targetString = None
 
-            for patternString in patterns:
-                try:
-                    match = patterns[patternString].search(targetString)
-                except TypeError:
-                    match = None
-                if match is not None:
+            for pattern in patterns:
+                if targetString is not None and checkMatch(pattern, targetString):
                     break
             else:
                 status = MPI.Status()
-                patternString = comm.recv(source=MPI.ANY_SOURCE, tag=mpiTagRegexPattern, status=status)
-                if patternString is None:
+                pattern = comm.recv(source=MPI.ANY_SOURCE, tag=mpiTagRegexPattern, status=status)
+                if pattern is None:
                     iNodesFinished[status.source - 1] = True
                     if sum(iNodesFinished) == nWorkerNodes:
                         break
                 else:
                     if verbose:
-                        print(f"[{time.time() - timeStart:.3f}] Generated pattern: '{patternString}'")
+                        print(f"[{time.time() - timeStart:.3f}] Generated pattern: '{pattern}'")
                         if targetString is not None:
                             print(
                                 f"[{time.time() - timeStart:.3f}] Generating pattern to match string: '{targetString}'"
                             )
                     comm.send(iLine, dest=status.source, tag=mpiTagLineIndex)
-                    patterns[patternString] = re.compile(patternString, re.MULTILINE)
+                    patterns.add(pattern)
             iLine += 1
     else:
         while True:
             try:
                 iLine = int(comm.recv(source=0, tag=mpiTagLineIndex))
-                targetString = fileContentsSplitConcatenated[iLine]
+                targetString = fileContentsConcatenated[iLine]
             except (IndexError, TypeError):
                 comm.send(None, dest=0, tag=mpiTagRegexPattern)
                 break
             else:
-                patternString = generatePatternString(targetString)
-                comm.send(patternString, dest=0, tag=mpiTagRegexPattern)
+                pattern = generatePatternString(targetString)
+                comm.send(pattern, dest=0, tag=mpiTagRegexPattern)
 
     if rank == 0:
         # Calculate frequency means and standard deviations
         print(f"[{time.time() - timeStart:.3f}] Calculating frequency means and standard deviations...")
-        frequencies = np.zeros((len(fileContentsSplit), len(patterns)))
-        patternList = list(patterns.values())
-        for iFile in range(len(fileContentsSplit)):
-            for iPattern in range(len(patternList)):
-                frequencies[iFile][iPattern] += len(patternList[iPattern].findall(fileContentsJoined[iFile]))
-        frequencyMeans = list(frequencies.mean(axis=0))
-        frequencyStddevs = list(frequencies.std(axis=0))
+        frequencies = [None] * len(patterns)
+        patternList = list(patterns)
+        for iPattern in range(len(patternList)):
+            frequencies[iPattern] = countFileMatches(patternList[iPattern], inputFiles)
+        frequencies = np.array(frequencies)
+        frequencyMeans = list(frequencies.mean(axis=1))
+        frequencyStddevs = list(frequencies.std(axis=1))
 
         # Write results to disk
         print(f"[{time.time() - timeStart:.3f}] Writing results to disk...")
         with open(outputFilenamePatterns, "w") as outputFilePatterns:
             with open(outputFilenameFrequencies, "w") as outputFileFrequencies:
                 for iPattern in range(len(patternList)):
-                    outputFilePatterns.write(f"{patternList[iPattern].pattern}\n")
+                    outputFilePatterns.write(f"{patternList[iPattern]}\n")
                     outputFileFrequencies.write(f"{frequencyMeans[iPattern]} {frequencyStddevs[iPattern]}\n")
 
         print(f"[{time.time() - timeStart:.3f}] Done.")
