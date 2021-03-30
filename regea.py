@@ -468,10 +468,10 @@ def generatePatternString(targetString):
     population = toolbox.population(n=1)
     population[0].fitness.values = toolbox.evaluate(population[0])
     assert population[0].fitness.values[0] > 0
-    assert len(set([node.name for node in population[0] if isinstance(node, deap.gp.Primitive)])) == 1
+    assert len(set([node.name for node in population[0] if isinstance(node, deap.gp.Primitive)])) <= 1
     assert len(set([node.name for node in population[0] if isinstance(node, deap.gp.Ephemeral)])) == 0
     assert len(set([node.name for node in population[0] if isinstance(node, deap.gp.Terminal)])) == 1
-    assert len(set([node.name for node in population[0]])) == 2
+    assert len(set([node.name for node in population[0]])) <= 2
 
     population.extend([None] * (populationSize - 1))
     for iIndividual in range(1, populationSize):
