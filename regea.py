@@ -23,7 +23,7 @@ verbose = True
 outputFilenamePatterns = "regea.report.patterns"
 outputFilenameFrequencies = "regea.report.frequencies"
 
-grepCmd = ["rg", "--pcre2"]
+grepCmd = ["rg", "--pcre2", "--no-multiline"]
 grepVersionCmd = grepCmd + ["--version"]
 grepCheckMatchCmd = grepCmd + ["--quiet", "--"]
 grepCountMatchesCmd = grepCmd + ["--count", "--no-filename", "--include-zero", "--"]
@@ -189,8 +189,8 @@ class NegatedRange:
     def primitive(*args):
         assert len(args) == NegatedRange.arity
         if args[0] == args[1]:
-            return f"[^{escape(chr(args[0]))}\\n\\r]"
-        return f"[^{escape(chr(min(args[0], args[1])))}-{escape(chr(max(args[0], args[1])))}\\n\\r]"
+            return f"[^{escape(chr(args[0]))}]"
+        return f"[^{escape(chr(min(args[0], args[1])))}-{escape(chr(max(args[0], args[1])))}]"
 
 
 class Set:
@@ -313,6 +313,13 @@ class WordBoundary:
         return "\\b"
 
 
+class NonWordBoundary:
+    returns = str
+
+    def terminal():
+        return "\\B"
+
+
 class WordBeginning:
     returns = str
 
@@ -338,14 +345,14 @@ class NonWordCharacter:
     returns = str
 
     def terminal():
-        return "[^\\w\\n\\r]"
+        return "\\W"
 
 
 class Whitespace:
     returns = str
 
     def terminal():
-        return "[^\\S\\n\\r]"
+        return "\\s"
 
 
 class NonWhitespace:
@@ -386,6 +393,7 @@ def generatePatternString(targetString):
         Empty.__name__: Empty,
         Wildcard.__name__: Wildcard,
         WordBoundary.__name__: WordBoundary,
+        NonWordBoundary.__name__: NonWordBoundary,
         WordBeginning.__name__: WordBeginning,
         WordEnd.__name__: WordEnd,
         WordCharacter.__name__: WordCharacter,
