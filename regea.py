@@ -12,7 +12,6 @@ from mpi4py import MPI
 import numpy as np
 import operator
 import random
-import re
 import string
 import subprocess
 import sys
@@ -46,8 +45,6 @@ treeHeightMax = 17
 treeHeightMaxInit = 8
 asciiMin = 32
 asciiMax = 126
-allowedCharacters = [re.escape(chr(i)) for i in range(asciiMin, asciiMax + 1)]
-nAllowedCharacters = len(allowedCharacters)
 
 # OpenMPI parameters
 comm = MPI.COMM_WORLD
@@ -125,6 +122,14 @@ def countFilesWithMatches(patternString, filenames):
     return sum([bool(count) for count in nMatches])
 
 
+def escape(pattern):
+    return pattern.translate({iChar: f"\\{chr(iChar)}" for iChar in b"()[]{}?*+-|^$\\.&~#"})
+
+
+allowedCharacters = [escape(chr(i)) for i in range(asciiMin, asciiMax + 1)]
+nAllowedCharacters = len(allowedCharacters)
+
+
 # Genetic programming primitives
 class IdentityFloat:
     argTypes = (float,)
@@ -173,8 +178,8 @@ class Range:
     def primitive(*args):
         assert len(args) == Range.arity
         if args[0] == args[1]:
-            return re.escape(chr(args[0]))
-        return f"[{re.escape(chr(min(args[0], args[1])))}-{re.escape(chr(max(args[0], args[1])))}]"
+            return escape(chr(args[0]))
+        return f"[{escape(chr(min(args[0], args[1])))}-{escape(chr(max(args[0], args[1])))}]"
 
 
 class NegatedRange:
@@ -185,8 +190,8 @@ class NegatedRange:
     def primitive(*args):
         assert len(args) == NegatedRange.arity
         if args[0] == args[1]:
-            return f"[^{re.escape(chr(args[0]))}\\n\\r]"
-        return f"[^{re.escape(chr(min(args[0], args[1])))}-{re.escape(chr(max(args[0], args[1])))}\\n\\r]"
+            return f"[^{escape(chr(args[0]))}\\n\\r]"
+        return f"[^{escape(chr(min(args[0], args[1])))}-{escape(chr(max(args[0], args[1])))}\\n\\r]"
 
 
 class Set:
@@ -277,7 +282,7 @@ class RandomCharacter:
     returns = str
 
     def ephemeralConstant():
-        return re.escape(chr(random.randint(asciiMin, asciiMax)))
+        return escape(chr(random.randint(asciiMin, asciiMax)))
 
 
 class RandomFloat:
@@ -666,7 +671,7 @@ def main(argv):
             linesCurrent[iFile] = fileContentsSorted[iFile][indices[iFile]]
         while True:
             if linesCurrent.count(linesCurrent[0]) == len(linesCurrent):
-                patterns.add(f"^{re.escape(linesCurrent[0])}$")
+                patterns.add(f"^{escape(linesCurrent[0])}$")
             iLineMin = argmin(linesCurrent)
             indices[iLineMin] += 1
             try:
