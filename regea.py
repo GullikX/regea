@@ -2,7 +2,6 @@
 
 import copy
 import deap
-import deap.algorithms
 import deap.base
 import deap.creator
 import deap.gp
