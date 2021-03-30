@@ -11,6 +11,7 @@ from mpi4py import MPI
 import numpy as np
 import operator
 import random
+import regex as re
 import string
 import subprocess
 import sys
@@ -88,19 +89,6 @@ def checkMatch(patternString, inputString, printErrors=False):
     if printErrors and output[Stream.STDERR]:
         print(output[Stream.STDERR].decode().rstrip("\n"))
     return process.returncode == 0
-
-
-def checkMatchMultiplePatterns(patternStrings, inputString):
-    iPattern = 0
-    while iPattern < len(patternStrings):
-        if checkMatch(
-            f"(?:{'|'.join(list(patternStrings)[iPattern:iPattern + grepCheckMatchBatchSize])})",
-            inputString,
-            printErrors=True,
-        ):
-            return True
-        iPattern += grepCheckMatchBatchSize
-    return False
 
 
 def countFileMatches(patternString, filenames):
@@ -654,7 +642,7 @@ def main(argv):
         print(f"[{time.time() - timeStart:.3f}] Loading input files...")
         fileContents = [None] * nInputFiles
         nLines = 0
-        patterns = set()
+        patterns = {}
 
         for iFile in range(nInputFiles):
             with open(inputFiles[iFile], "r") as f:
@@ -678,7 +666,8 @@ def main(argv):
             linesCurrent[iFile] = fileContentsSorted[iFile][indices[iFile]]
         while True:
             if linesCurrent.count(linesCurrent[0]) == len(linesCurrent):
-                patterns.add(f"^{escape(linesCurrent[0])}$")
+                patternString = f"^{escape(linesCurrent[0])}$"
+                patterns[patternString] = re.compile(patternString, re.MULTILINE)
             iLineMin = argmin(linesCurrent)
             indices[iLineMin] += 1
             try:
@@ -687,11 +676,11 @@ def main(argv):
                 break
 
         # Sanity check
-        for pattern in patterns:
-            nMatches = countFilesWithMatches(pattern, inputFiles)
+        for patternString in patterns:
+            nMatches = countFilesWithMatches(patternString, inputFiles)
             assert (
                 nMatches == nInputFiles
-            ), f"Input file corruption detected! Try running 'dos2unix' on the input files and try again. (regex pattern '{pattern}' should match all input files)"
+            ), f"Input file corruption detected! Try running 'dos2unix' on the input files and try again. (regex pattern '{patternString}' should match all input files)"
     else:
         fileContentsConcatenated = None
 
@@ -708,7 +697,14 @@ def main(argv):
                     comm.send(None, dest=iNode, tag=mpiTagLineIndex)
                     break
 
-                if not targetString or not checkMatchMultiplePatterns(patterns, targetString):
+                for patternString in patterns:
+                    try:
+                        match = patterns[patternString].match(targetString)
+                    except TypeError:
+                        match = None
+                    if match is not None:
+                        break
+                else:
                     print(f"[{time.time() - timeStart:.3f}] Generating pattern to match string: '{targetString}'")
                     comm.send(iLine, dest=iNode, tag=mpiTagLineIndex)
                     iLine += 1
@@ -730,22 +726,29 @@ def main(argv):
             except IndexError:
                 targetString = None
 
-            if not targetString or not checkMatchMultiplePatterns(patterns, targetString):
+            for patternString in patterns:
+                try:
+                    match = patterns[patternString].match(targetString)
+                except TypeError:
+                    match = None
+                if match is not None:
+                    break
+            else:
                 status = MPI.Status()
-                pattern = comm.recv(source=MPI.ANY_SOURCE, tag=mpiTagRegexPattern, status=status)
-                if pattern is None:
+                patternString = comm.recv(source=MPI.ANY_SOURCE, tag=mpiTagRegexPattern, status=status)
+                if patternString is None:
                     iNodesFinished[status.source - 1] = True
                     if sum(iNodesFinished) == nWorkerNodes:
                         break
                 else:
                     if verbose:
-                        print(f"[{time.time() - timeStart:.3f}] Generated pattern: '{pattern}'")
+                        print(f"[{time.time() - timeStart:.3f}] Generated pattern: '{patternString}'")
                         if targetString is not None:
                             print(
                                 f"[{time.time() - timeStart:.3f}] Generating pattern to match string: '{targetString}'"
                             )
                     comm.send(iLine, dest=status.source, tag=mpiTagLineIndex)
-                    patterns.add(pattern)
+                    patterns[patternString] = re.compile(patternString)
             iLine += 1
     else:
         while True:
@@ -756,16 +759,16 @@ def main(argv):
                 comm.send(None, dest=0, tag=mpiTagRegexPattern)
                 break
             else:
-                pattern = generatePatternString(targetString)
-                comm.send(pattern, dest=0, tag=mpiTagRegexPattern)
+                patternString = generatePatternString(targetString)
+                comm.send(patternString, dest=0, tag=mpiTagRegexPattern)
 
     if rank == 0:
         # Calculate frequency means and standard deviations
         print(f"[{time.time() - timeStart:.3f}] Calculating frequency means and standard deviations...")
         frequencies = [None] * len(patterns)
-        patternList = list(patterns)
-        for iPattern in range(len(patternList)):
-            frequencies[iPattern] = countFileMatches(patternList[iPattern], inputFiles)
+        patternStringList = list(patterns.keys())
+        for iPattern in range(len(patternStringList)):
+            frequencies[iPattern] = countFileMatches(patternStringList[iPattern], inputFiles)
         frequencies = np.array(frequencies)
         frequencyMeans = list(frequencies.mean(axis=1))
         frequencyStddevs = list(frequencies.std(axis=1))
@@ -774,8 +777,8 @@ def main(argv):
         print(f"[{time.time() - timeStart:.3f}] Writing results to disk...")
         with open(outputFilenamePatterns, "w") as outputFilePatterns:
             with open(outputFilenameFrequencies, "w") as outputFileFrequencies:
-                for iPattern in range(len(patternList)):
-                    outputFilePatterns.write(f"{patternList[iPattern]}\n")
+                for iPattern in range(len(patternStringList)):
+                    outputFilePatterns.write(f"{patternStringList[iPattern]}\n")
                     outputFileFrequencies.write(f"{frequencyMeans[iPattern]} {frequencyStddevs[iPattern]}\n")
 
         print(f"[{time.time() - timeStart:.3f}] Done.")
