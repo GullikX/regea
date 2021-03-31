@@ -69,6 +69,10 @@ class Stream(enum.IntEnum):
     STDERR = 1
 
 
+class Node(enum.IntEnum):
+    MASTER = 0
+
+
 # Util functions
 def argmin(iterable):
     return min(range(len(iterable)), key=iterable.__getitem__)
@@ -638,7 +642,7 @@ def main(argv):
     nInputFiles = len(inputFiles)
 
     # Load input files
-    if rank == 0:
+    if rank == Node.MASTER:
         print(f"[{time.time() - timeStart:.3f}] Loading input files...")
         fileContents = [None] * nInputFiles
         nLines = 0
@@ -684,10 +688,10 @@ def main(argv):
     else:
         fileContentsConcatenated = None
 
-    fileContentsConcatenated = comm.bcast(fileContentsConcatenated, root=0)
+    fileContentsConcatenated = comm.bcast(fileContentsConcatenated, root=Node.MASTER)
 
     # Generate regex patterns using EA
-    if rank == 0:
+    if rank == Node.MASTER:
         iLine = 0
         for iNode in range(1, size):
             while True:
@@ -753,16 +757,16 @@ def main(argv):
     else:
         while True:
             try:
-                iLine = int(comm.recv(source=0, tag=mpiTagLineIndex))
+                iLine = int(comm.recv(source=Node.MASTER, tag=mpiTagLineIndex))
                 targetString = fileContentsConcatenated[iLine]
             except (IndexError, TypeError):
-                comm.send(None, dest=0, tag=mpiTagRegexPattern)
+                comm.send(None, dest=Node.MASTER, tag=mpiTagRegexPattern)
                 break
             else:
                 patternString = generatePatternString(targetString)
-                comm.send(patternString, dest=0, tag=mpiTagRegexPattern)
+                comm.send(patternString, dest=Node.MASTER, tag=mpiTagRegexPattern)
 
-    if rank == 0:
+    if rank == Node.MASTER:
         # Calculate frequency means and standard deviations
         print(f"[{time.time() - timeStart:.3f}] Calculating frequency means and standard deviations...")
         frequencies = [None] * len(patterns)
