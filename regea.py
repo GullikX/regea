@@ -28,7 +28,6 @@ grepCmd = ["rg", "--pcre2", "--no-multiline"]
 grepVersionCmd = grepCmd + ["--version"]
 grepCheckMatchCmd = grepCmd + ["--quiet", "--"]
 grepCountMatchesCmd = grepCmd + ["--count", "--no-filename", "--include-zero", "--"]
-grepCheckMatchBatchSize = 256  # reduce if you get 'regex pattern to large' errors
 
 # Evolution parameters TODO: update values
 populationSize = 10
