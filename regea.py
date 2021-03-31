@@ -33,6 +33,7 @@ grepCheckMatchBatchSize = 256  # reduce if you get 'regex pattern to large' erro
 # Evolution parameters TODO: update values
 populationSize = 10
 evolutionTimeout = 60  # seconds
+tournamentSize = 3
 crossoverProbability = 0.17896349
 mutUniformProbability = 0.00164105
 mutNodeReplacementProbability = 0.56501573
@@ -438,7 +439,7 @@ def generatePatternString(targetString):
         toolbox = deap.base.Toolbox()
         toolbox.register("compile", deap.gp.compile, pset=psetMutate)
 
-        toolbox.register("select", deap.tools.selTournament, tournsize=3)
+        toolbox.register("select", deap.tools.selTournament, tournsize=tournamentSize)
         toolbox.register("mate", deap.gp.cxOnePoint)
         toolbox.register("expr_mutUniform", deap.gp.genHalfAndHalf, min_=0, max_=2)
         toolbox.register("mutUniform", deap.gp.mutUniform, expr=toolbox.expr_mutUniform, pset=psetMutate)
