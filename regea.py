@@ -52,8 +52,6 @@ comm = MPI.COMM_WORLD
 size = comm.Get_size()
 rank = comm.Get_rank()
 name = MPI.Get_processor_name()
-mpiTagLineIndex = 1234
-mpiTagRegexPattern = 5678
 nWorkerNodes = size - 1
 
 # Global variables
@@ -65,13 +63,18 @@ timeStart = time.time()
 
 
 # Enums
-class Stream(enum.IntEnum):
-    STDOUT = 0
-    STDERR = 1
+class MpiTag(enum.IntEnum):
+    LINE_INDEX = 0
+    REGEX_PATTERN = 1
 
 
 class Node(enum.IntEnum):
     MASTER = 0
+
+
+class Stream(enum.IntEnum):
+    STDOUT = 0
+    STDERR = 1
 
 
 # Util functions
@@ -699,7 +702,7 @@ def main(argv):
                 try:
                     targetString = fileContentsConcatenated[iLine]
                 except IndexError:
-                    comm.send(None, dest=iNode, tag=mpiTagLineIndex)
+                    comm.send(None, dest=iNode, tag=MpiTag.LINE_INDEX)
                     break
 
                 for patternString in patterns:
@@ -711,7 +714,7 @@ def main(argv):
                         break
                 else:
                     print(f"[{time.time() - timeStart:.3f}] Generating pattern to match string: '{targetString}'")
-                    comm.send(iLine, dest=iNode, tag=mpiTagLineIndex)
+                    comm.send(iLine, dest=iNode, tag=MpiTag.LINE_INDEX)
                     iLine += 1
                     break
                 iLine += 1
@@ -740,7 +743,7 @@ def main(argv):
                     break
             else:
                 status = MPI.Status()
-                patternString = comm.recv(source=MPI.ANY_SOURCE, tag=mpiTagRegexPattern, status=status)
+                patternString = comm.recv(source=MPI.ANY_SOURCE, tag=MpiTag.REGEX_PATTERN, status=status)
                 if patternString is None:
                     iNodesFinished[status.source - 1] = True
                     if sum(iNodesFinished) == nWorkerNodes:
@@ -752,20 +755,20 @@ def main(argv):
                             print(
                                 f"[{time.time() - timeStart:.3f}] Generating pattern to match string: '{targetString}'"
                             )
-                    comm.send(iLine, dest=status.source, tag=mpiTagLineIndex)
+                    comm.send(iLine, dest=status.source, tag=MpiTag.LINE_INDEX)
                     patterns[patternString] = re.compile(patternString)
             iLine += 1
     else:
         while True:
             try:
-                iLine = int(comm.recv(source=Node.MASTER, tag=mpiTagLineIndex))
+                iLine = int(comm.recv(source=Node.MASTER, tag=MpiTag.LINE_INDEX))
                 targetString = fileContentsConcatenated[iLine]
             except (IndexError, TypeError):
-                comm.send(None, dest=Node.MASTER, tag=mpiTagRegexPattern)
+                comm.send(None, dest=Node.MASTER, tag=MpiTag.REGEX_PATTERN)
                 break
             else:
                 patternString = generatePatternString(targetString)
-                comm.send(patternString, dest=Node.MASTER, tag=mpiTagRegexPattern)
+                comm.send(patternString, dest=Node.MASTER, tag=MpiTag.REGEX_PATTERN)
 
     if rank == Node.MASTER:
         # Calculate frequency means and standard deviations
