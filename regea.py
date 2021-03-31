@@ -769,18 +769,48 @@ def main(argv):
                 patternString = generatePatternString(targetString)
                 comm.send(patternString, dest=Node.MASTER, tag=MpiTag.REGEX_PATTERN)
 
+    # Calculate frequency means and standard deviations
     if rank == Node.MASTER:
-        # Calculate frequency means and standard deviations
         print(f"[{time.time() - timeStart:.3f}] Calculating frequency means and standard deviations...")
-        frequencies = [None] * len(patterns)
         patternStringList = list(patterns.keys())
-        for iPattern in range(len(patternStringList)):
-            frequencies[iPattern] = countFileMatches(patternStringList[iPattern], inputFiles)
-        frequencies = np.array(frequencies)
-        frequencyMeans = list(frequencies.mean(axis=1))
-        frequencyStddevs = list(frequencies.std(axis=1))
+        iPatterns = np.linspace(0, len(patternStringList) - 1, len(patternStringList), dtype=np.int64)
+    else:
+        patternStringList = None
+        iPatterns = None
+    patternStringList = comm.bcast(patternStringList, root=Node.MASTER)
 
-        # Write results to disk
+    nPatterns = len(patternStringList)
+    nPatternsLocal = np.array([nPatterns // size] * size, dtype=np.int64)
+    nPatternsLocal[: (nPatterns % size)] += 1
+    iPatternsLocal = np.zeros(nPatternsLocal[rank], dtype=np.int64)
+
+    displacement = [0] * size
+    for iNode in range(1, size):
+        displacement[iNode] = displacement[iNode - 1] + nPatternsLocal[iNode - 1]
+
+    comm.Scatterv([iPatterns, nPatternsLocal, displacement, MPI.LONG], iPatternsLocal, root=Node.MASTER)
+    comm.Barrier()
+
+    frequencies = [None] * nPatternsLocal[rank]
+    for i in range(nPatternsLocal[rank]):
+        frequencies[i] = countFileMatches(patternStringList[iPatternsLocal[i]], inputFiles)
+    frequencies = np.array(frequencies, dtype=np.float64)
+
+    frequencyMeansLocal = frequencies.mean(axis=1)
+    frequencyStddevsLocal = frequencies.std(axis=1)
+
+    if rank == Node.MASTER:
+        frequencyMeans = np.zeros(nPatterns, dtype=np.float64)
+        frequencyStddevs = np.zeros(nPatterns, dtype=np.float64)
+    else:
+        frequencyMeans = None
+        frequencyStddevs = None
+
+    comm.Gatherv(frequencyMeansLocal, [frequencyMeans, nPatternsLocal, displacement, MPI.LONG], root=Node.MASTER)
+    comm.Gatherv(frequencyStddevsLocal, [frequencyStddevs, nPatternsLocal, displacement, MPI.LONG], root=Node.MASTER)
+
+    # Write results to disk
+    if rank == Node.MASTER:
         print(f"[{time.time() - timeStart:.3f}] Writing results to disk...")
         with open(outputFilenamePatterns, "w") as outputFilePatterns:
             with open(outputFilenameFrequencies, "w") as outputFileFrequencies:
