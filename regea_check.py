@@ -2,11 +2,15 @@
 import numpy as np
 import regex
 import sys
+import time
 
 inputFilenamePatterns = "regea.output.patterns"
 inputFilenameFrequencies = "regea.output.frequencies"
 outputFilenameSuffix = "diff"
 threshold = 1.0  # Number of standard deviations
+
+# Global variables
+timeStart = time.time()
 
 
 def countStddevs(mean, stddev, value):
@@ -22,6 +26,7 @@ def main(argv):
         return 1
 
     # Load input files
+    print(f"[{time.time() - timeStart:.3f}] Loading error file...")
     errorFile = sys.argv[1]
     errorFileContents = [None]
     with open(errorFile, "r") as f:
@@ -29,6 +34,7 @@ def main(argv):
     errorFileContents = list(filter(None, errorFileContents))
 
     # Load input files
+    print(f"[{time.time() - timeStart:.3f}] Loading reference files...")
     referenceFiles = sys.argv[2:]
     referenceFileContents = [None] * len(referenceFiles)
     for iFile in range(len(referenceFiles)):
@@ -37,6 +43,7 @@ def main(argv):
         referenceFileContents[iFile] = list(filter(None, referenceFileContents[iFile]))
 
     # Load training result
+    print(f"[{time.time() - timeStart:.3f}] Loading training result...")
     patternStrings = []
     with open(inputFilenamePatterns, "r") as inputFilePatterns:
         patternStrings.extend(inputFilePatterns.read().splitlines())
@@ -45,6 +52,7 @@ def main(argv):
     with open(inputFilenameFrequencies, "r") as inputFileFrequencies:
         patternFrequencies.extend(inputFileFrequencies.read().splitlines())
 
+    print(f"[{time.time() - timeStart:.3f}] Parsing training result...")
     frequencyMeans = [None] * len(patternFrequencies)
     frequencyStddevs = [None] * len(patternFrequencies)
     frequencyMeansMap = {}
@@ -55,11 +63,13 @@ def main(argv):
         frequencyMeansMap[patternStrings[iPattern]] = frequencyMeans[iPattern]
         frequencyStddevsMap[patternStrings[iPattern]] = frequencyStddevs[iPattern]
 
+    print(f"[{time.time() - timeStart:.3f}] Compiling regex patterns...")
     patterns = [None] * len(patternStrings)
     for iPattern in range(len(patternStrings)):
         patterns[iPattern] = regex.compile(patternStrings[iPattern], regex.MULTILINE)
 
     # Sanity check
+    print(f"[{time.time() - timeStart:.3f}] Running sanity checks...")
     for iFile in range(len(referenceFileContents)):
         for iLine in range(len(referenceFileContents[iFile])):
             for iPattern in range(len(patterns)):
@@ -71,6 +81,7 @@ def main(argv):
                 )
 
     # Check for discrepancies
+    print(f"[{time.time() - timeStart:.3f}] Checking for discrepancies...")
     linesMatched = [False] * len(errorFileContents)
     errorFrequencies = {}
     for iPattern in range(len(patterns)):
@@ -81,6 +92,7 @@ def main(argv):
                 linesMatched[iLine] = True
 
     # Generate diff
+    print(f"[{time.time() - timeStart:.3f}] Generating diff...")
     unmatchedLines = set()
     nUnmatchedLineOccurances = {}
     diffFileContents = {}
@@ -132,7 +144,9 @@ def main(argv):
     )
 
     # Write results to disk
-    with open(f"{errorFile}.{outputFilenameSuffix}", "w") as diffFile:
+    outputFilename = f"{errorFile}.{outputFilenameSuffix}"
+    print(f"[{time.time() - timeStart:.3f}] Writing results to '{outputFilename}'...")
+    with open(outputFilename, "w") as diffFile:
         if unmatchedLines:
             unmatchedLinesSorted = sorted(
                 list(unmatchedLines), key=lambda item: nUnmatchedLineOccurances[item], reverse=True
@@ -149,6 +163,8 @@ def main(argv):
             )
             diffFile.write("\n".join(sorted(list(diffFileContents[patternString]))))
             diffFile.write("\n\n")
+
+    print(f"[{time.time() - timeStart:.3f}] Done.")
 
 
 if __name__ == "__main__":
