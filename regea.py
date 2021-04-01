@@ -783,7 +783,7 @@ def main(argv):
     if rank == Node.MASTER:
         print(f"[{time.time() - timeStart:.3f}] Calculating frequency means and standard deviations...")
         patternStringList = list(patterns.keys())
-        iPatterns = np.linspace(0, len(patternStringList) - 1, len(patternStringList), dtype=np._int)
+        iPatterns = np.linspace(0, len(patternStringList) - 1, len(patternStringList), dtype=np.int_)
     else:
         patternStringList = None
         iPatterns = None
