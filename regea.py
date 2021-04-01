@@ -645,6 +645,11 @@ def main(argv):
         print(f"Error when running command '{' '.join(grepVersionCmd)}'")
         return 1
 
+    for datatype in typeMap:
+        assert (
+            datatype.itemsize == typeMap[datatype].Get_size()
+        ), f"Datatype size mismatch: data type '{datatype.name}' has size {datatype.itemsize} while '{typeMap[datatype].name}' has size {typeMap[datatype].Get_size()}. Please adjust the typeMap parameter."
+
     inputFiles.extend(argv[1:])
     nInputFiles = len(inputFiles)
 
