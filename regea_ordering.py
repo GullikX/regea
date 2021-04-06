@@ -5,7 +5,7 @@ import random
 import regex
 import sys
 
-inputFilenamePatterns = "regea.report.patterns"
+inputFilenamePatterns = "regea.output.patterns"
 nIterations = int(1e6)
 nPatternsToShow = 10
 ruleValidityThreshold = 0.90

@@ -3,8 +3,8 @@ import numpy as np
 import regex
 import sys
 
-inputFilenamePatterns = "regea.report.patterns"
-inputFilenameFrequencies = "regea.report.frequencies"
+inputFilenamePatterns = "regea.output.patterns"
+inputFilenameFrequencies = "regea.output.frequencies"
 threshold = 1.0  # Number of standard deviations
 
 

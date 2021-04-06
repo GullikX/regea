@@ -21,8 +21,8 @@ import time
 # General parameters
 verbose = True
 
-outputFilenamePatterns = "regea.report.patterns"
-outputFilenameFrequencies = "regea.report.frequencies"
+outputFilenamePatterns = "regea.output.patterns"
+outputFilenameFrequencies = "regea.output.frequencies"
 
 grepCmd = ["rg", "--pcre2", "--no-multiline"]
 grepVersionCmd = grepCmd + ["--version"]
