@@ -9,7 +9,7 @@ import time
 inputFilenamePatterns = "regea.output.patterns"
 outputFilenameSuffix = "ordering"
 iterationTimeLimit = 600  # seconds
-nPatternsToShow = 10
+nPatternsToShow = 100
 ruleValidityThreshold = 0.90
 
 # Global variables
@@ -108,12 +108,14 @@ def main(argv):
     patternStrings = []
     with open(inputFilenamePatterns, "r") as inputFilePatterns:
         patternStrings.extend(inputFilePatterns.read().splitlines())
+
+    print(f"[{time.time() - timeStart:.3f}] Compiling regex patterns...")
     patterns = [None] * len(patternStrings)
     for iPattern in range(len(patternStrings)):
         patterns[iPattern] = regex.compile(patternStrings[iPattern], regex.MULTILINE)
 
     # Convert log entries to lists of pattern indices
-    print(f"[{time.time() - timeStart:.3f}] Parsing training result...")
+    print(f"[{time.time() - timeStart:.3f}] Checking file ordering...")
     errorPatternIndices = np.array([-1] * len(errorFileContents), dtype=np.int64)
     for iLine in range(len(errorFileContents)):
         for iPattern in range(len(patterns)):
@@ -186,7 +188,9 @@ def main(argv):
                     f"    Line '{match.string[match.span()[0] : match.span()[1]]}' should always come {RuleType(rule.type).name} '{matchOther.string[matchOther.span()[0] : matchOther.span()[1]]}' (validity {100*ruleValidities[rule]:.1f}%)\n"
                 )
             orderingFile.write("\n")
-        orderingFile.write(f"(+{max(len(violatedRulesPerPattern) - nPatternsToShow, 0)} more)\n\n")
+        nMorePatternsToShow = len(violatedRulesPerPattern) - nPatternsToShow
+        if nMorePatternsToShow > 0:
+            orderingFile.write(f"(+{nMorePatternsToShow} more)\n\n")
         orderingFile.write(
             f"Summary: error log violates {nRuleViolations}/{len(rules)} randomly generated rules ({100*nRuleViolations/len(rules):.1f}%)\n"
         )
