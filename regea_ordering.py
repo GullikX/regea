@@ -4,12 +4,16 @@ import numpy as np
 import random
 import regex
 import sys
+import time
 
 inputFilenamePatterns = "regea.output.patterns"
 outputFilenameSuffix = "ordering"
 nIterations = int(1e6)
 nPatternsToShow = 10
 ruleValidityThreshold = 0.90
+
+# Global variables
+timeStart = time.time()
 
 
 class RuleType(enum.IntEnum):
@@ -83,6 +87,7 @@ def main(argv):
         return 1
 
     # Load input files
+    print(f"[{time.time() - timeStart:.3f}] Loading error file...")
     errorFile = sys.argv[1]
     errorFileContents = [None]
     with open(errorFile, "r") as f:
@@ -90,6 +95,7 @@ def main(argv):
     errorFileContents = list(filter(None, errorFileContents))
 
     # Load input files
+    print(f"[{time.time() - timeStart:.3f}] Loading reference files...")
     referenceFiles = sys.argv[2:]
     referenceFileContents = [None] * len(referenceFiles)
     for iFile in range(len(referenceFiles)):
@@ -98,6 +104,7 @@ def main(argv):
         referenceFileContents[iFile] = list(filter(None, referenceFileContents[iFile]))
 
     # Load training result
+    print(f"[{time.time() - timeStart:.3f}] Loading training result...")
     patternStrings = []
     with open(inputFilenamePatterns, "r") as inputFilePatterns:
         patternStrings.extend(inputFilePatterns.read().splitlines())
@@ -106,6 +113,7 @@ def main(argv):
         patterns[iPattern] = regex.compile(patternStrings[iPattern], regex.MULTILINE)
 
     # Convert log entries to lists of pattern indices
+    print(f"[{time.time() - timeStart:.3f}] Parsing training result...")
     errorPatternIndices = np.array([-1] * len(errorFileContents), dtype=np.int64)
     for iLine in range(len(errorFileContents)):
         for iPattern in range(len(patterns)):
@@ -125,6 +133,7 @@ def main(argv):
                     break
         assert not len(np.where(referencePatternIndices[iFile] == -1)[0])
 
+    print(f"[{time.time() - timeStart:.3f}] Generating ordering rules...")
     rules = set()
     violatedRulesPerPattern = {}
     ruleValidities = {}
@@ -155,7 +164,9 @@ def main(argv):
                 violatedRulesPerPattern[rule.patternOther].add(rule)
 
     errorFileContentsJoined = "\n".join(errorFileContents)
-    with open(f"{errorFile}.{outputFilenameSuffix}", "w") as orderingFile:
+    outputFilename = f"{errorFile}.{outputFilenameSuffix}"
+    print(f"[{time.time() - timeStart:.3f}] Writing results to '{outputFilename}'...")
+    with open(outputFilename, "w") as orderingFile:
         for pattern in list(dict(sorted(violatedRulesPerPattern.items(), key=lambda item: len(item[1]), reverse=True)))[
             :nPatternsToShow
         ]:
@@ -177,6 +188,8 @@ def main(argv):
         orderingFile.write(
             f"Summary: error log violates {nRuleViolations}/{len(rules)} randomly generated rules ({100*nRuleViolations/len(rules):.1f}%)\n"
         )
+
+    print(f"[{time.time() - timeStart:.3f}] Done.")
 
 
 if __name__ == "__main__":
