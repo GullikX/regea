@@ -154,30 +154,28 @@ def main(argv):
                 violatedRulesPerPattern[rule.patternOther].add(rule)
 
     errorFileContentsJoined = "\n".join(errorFileContents)
-    for pattern in list(dict(sorted(violatedRulesPerPattern.items(), key=lambda item: len(item[1]), reverse=True)))[
-        :nPatternsToShow
-    ]:
-        ruleValidityAverage = 0.0
-        for rule in violatedRulesPerPattern[pattern]:
-            ruleValidityAverage += ruleValidities[rule] / len(violatedRulesPerPattern[pattern])
-        match = pattern.search(errorFileContentsJoined)
-        print(
-            f"Violated rules containing '{match.string[match.span()[0] : match.span()[1]]}' (x{len(violatedRulesPerPattern[pattern])}, average validity {100*ruleValidityAverage:.1f}%):"
-        )
-        for rule in violatedRulesPerPattern[pattern]:
-            match = rule.pattern.search(errorFileContentsJoined)
-            matchOther = rule.patternOther.search(errorFileContentsJoined)
-            print(
-                f"    Line '{match.string[match.span()[0] : match.span()[1]]}' should always come {RuleType(rule.type).name} '{matchOther.string[matchOther.span()[0] : matchOther.span()[1]]}' (validity {100*ruleValidities[rule]:.1f}%)"
+    with open(f"{errorFile}.orderingviolations", "w") as orderingFile:
+        for pattern in list(dict(sorted(violatedRulesPerPattern.items(), key=lambda item: len(item[1]), reverse=True)))[
+            :nPatternsToShow
+        ]:
+            ruleValidityAverage = 0.0
+            for rule in violatedRulesPerPattern[pattern]:
+                ruleValidityAverage += ruleValidities[rule] / len(violatedRulesPerPattern[pattern])
+            match = pattern.search(errorFileContentsJoined)
+            orderingFile.write(
+                f"Violated rules containing '{match.string[match.span()[0] : match.span()[1]]}' (x{len(violatedRulesPerPattern[pattern])}, average validity {100*ruleValidityAverage:.1f}%):\n"
             )
-        print("")
-    print(f"(+{max(len(violatedRulesPerPattern) - nPatternsToShow, 0)} more)")
-    print("")
-    print(
-        f"Summary: error log violates {nRuleViolations}/{len(rules)} randomly generated rules ({100*nRuleViolations/len(rules):.1f}%)"
-    )
-
-    return 0
+            for rule in violatedRulesPerPattern[pattern]:
+                match = rule.pattern.search(errorFileContentsJoined)
+                matchOther = rule.patternOther.search(errorFileContentsJoined)
+                orderingFile.write(
+                    f"    Line '{match.string[match.span()[0] : match.span()[1]]}' should always come {RuleType(rule.type).name} '{matchOther.string[matchOther.span()[0] : matchOther.span()[1]]}' (validity {100*ruleValidities[rule]:.1f}%)\n"
+                )
+            orderingFile.write("\n")
+        orderingFile.write(f"(+{max(len(violatedRulesPerPattern) - nPatternsToShow, 0)} more)\n\n")
+        orderingFile.write(
+            f"Summary: error log violates {nRuleViolations}/{len(rules)} randomly generated rules ({100*nRuleViolations/len(rules):.1f}%)\n"
+        )
 
 
 if __name__ == "__main__":
