@@ -30,7 +30,7 @@ grepCheckMatchCmd = grepCmd + ["--quiet", "--"]
 grepCountMatchesCmd = grepCmd + ["--count", "--no-filename", "--include-zero", "--"]
 
 # Evolution parameters TODO: update values
-populationSize = 10
+populationSize = 50
 evolutionTimeout = 60  # seconds
 tournamentSize = 3
 crossoverProbability = 0.17896349
