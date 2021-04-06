@@ -47,6 +47,7 @@ asciiMin = 32
 asciiMax = 126
 
 # OpenMPI parameters
+mpiSizeMin = 2
 comm = MPI.COMM_WORLD
 size = comm.Get_size()
 rank = comm.Get_rank()
@@ -628,8 +629,8 @@ def generatePatternString(targetString):
 
 # Main
 def main(argv):
-    if size < 2:
-        print(f"Error: Needs at least 2 mpi nodes (current size: {size})")
+    if size < mpiSizeMin:
+        print(f"Error: Needs at least {mpiSizeMin} mpi nodes (current size: {size})")
         return 1
 
     if len(argv) < 2:
