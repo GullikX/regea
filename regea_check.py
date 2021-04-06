@@ -5,6 +5,7 @@ import sys
 
 inputFilenamePatterns = "regea.output.patterns"
 inputFilenameFrequencies = "regea.output.frequencies"
+outputFilenameSuffix = "diff"
 threshold = 1.0  # Number of standard deviations
 
 
@@ -131,7 +132,7 @@ def main(argv):
     )
 
     # Write results to disk
-    with open(f"{errorFile}.diff", "w") as diffFile:
+    with open(f"{errorFile}.{outputFilenameSuffix}", "w") as diffFile:
         if unmatchedLines:
             unmatchedLinesSorted = sorted(
                 list(unmatchedLines), key=lambda item: nUnmatchedLineOccurances[item], reverse=True

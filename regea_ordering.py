@@ -6,6 +6,7 @@ import regex
 import sys
 
 inputFilenamePatterns = "regea.output.patterns"
+outputFilenameSuffix = "ordering"
 nIterations = int(1e6)
 nPatternsToShow = 10
 ruleValidityThreshold = 0.90
@@ -154,7 +155,7 @@ def main(argv):
                 violatedRulesPerPattern[rule.patternOther].add(rule)
 
     errorFileContentsJoined = "\n".join(errorFileContents)
-    with open(f"{errorFile}.orderingviolations", "w") as orderingFile:
+    with open(f"{errorFile}.{outputFilenameSuffix}", "w") as orderingFile:
         for pattern in list(dict(sorted(violatedRulesPerPattern.items(), key=lambda item: len(item[1]), reverse=True)))[
             :nPatternsToShow
         ]:
