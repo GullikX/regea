@@ -629,7 +629,7 @@ def generatePatternString(targetString):
 # Main
 def main(argv):
     if size < 2:
-        print(f"Error: Needs at least two nodes (current size {size})")
+        print(f"Error: Needs at least 2 mpi nodes (current size: {size})")
         return 1
 
     if len(argv) < 2:
@@ -639,7 +639,7 @@ def main(argv):
     try:
         subprocess.check_call(grepVersionCmd, stdout=subprocess.DEVNULL)
     except FileNotFoundError:
-        print(f"Error: binary '{grepBinary}' not found in PATH")
+        print(f"Error: binary '{grepCmd[0]}' not found in $PATH, please install ripgrep")
         return 1
     except subprocess.CalledProcessError:
         print(f"Error when running command '{' '.join(grepVersionCmd)}'")
