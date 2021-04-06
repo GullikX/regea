@@ -17,6 +17,10 @@ Regea uses OpenMPI which allow calculations to parallelized across multiple comp
 
 * ripgrep (https://github.com/BurntSushi/ripgrep)
 
+Command to install python dependencies using `pip`:
+```
+python3 -m pip install -r requirements.txt
+```
 
 ## Usage
 
