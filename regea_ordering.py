@@ -8,7 +8,7 @@ import time
 
 inputFilenamePatterns = "regea.output.patterns"
 outputFilenameSuffix = "ordering"
-nIterations = int(1e6)
+iterationTimeLimit = 600  # seconds
 nPatternsToShow = 10
 ruleValidityThreshold = 0.90
 
@@ -133,12 +133,14 @@ def main(argv):
                     break
         assert not len(np.where(referencePatternIndices[iFile] == -1)[0])
 
-    print(f"[{time.time() - timeStart:.3f}] Generating ordering rules...")
+    print(f"[{time.time() - timeStart:.3f}] Generating ordering rules for {iterationTimeLimit} seconds...")
     rules = set()
     violatedRulesPerPattern = {}
     ruleValidities = {}
     nRuleViolations = 0
-    for iIteration in range(nIterations):
+    timeIterationStart = time.time()
+
+    while time.time() - timeIterationStart < iterationTimeLimit:
         rule = Rule(patterns)
         if rule in rules:
             continue
