@@ -123,7 +123,7 @@ def main(argv):
                 errorPatternIndices[iLine] = iPattern
                 break
     errorPatternIndices = errorPatternIndices[errorPatternIndices != -1]
-    assert not len(np.where(errorPatternIndices == -1)[0])
+    assert len(np.where(errorPatternIndices == -1)[0]) == 0
 
     referencePatternIndices = [None] * len(referenceFiles)
     for iFile in range(len(referenceFiles)):
@@ -133,7 +133,9 @@ def main(argv):
                 if patterns[iPattern].match(referenceFileContents[iFile][iLine]) is not None:
                     referencePatternIndices[iFile][iLine] = iPattern
                     break
-        assert not len(np.where(referencePatternIndices[iFile] == -1)[0])
+        assert (
+            len(np.where(referencePatternIndices[iFile] == -1)[0]) == 0
+        ), f"Some lines in the reference file '{referenceFiles[iFile]}' were not matched by any pattern. Does the training result '{inputFilenamePatterns}' really correspond to the specified reference files?"
 
     print(f"[{time.time() - timeStart:.3f}] Generating ordering rules for {iterationTimeLimit} seconds...")
     rules = set()

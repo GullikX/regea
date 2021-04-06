@@ -77,7 +77,7 @@ def main(argv):
                     break
             else:
                 raise AssertionError(
-                    f"Line '{referenceFiles[iFile]}:{iLine}' at {referenceFiles[iFile]}:{iLine} not matched by any pattern."
+                    f"Line '{referenceFiles[iFile]}:{iLine}' at {referenceFiles[iFile]}:{iLine} not matched by any pattern. Does the training result '{inputFilenamePatterns}' really correspond to the specified reference files?"
                 )
 
     # Check for discrepancies
