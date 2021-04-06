@@ -32,6 +32,8 @@ mpiexec python3 -m mpi4py ./regea.py referencefile1.log referencefile2.log ...
 ```
 This creates the files `regea.output.patterns` and `regea.output.frequencies` in the current working directory. These are used in the subsequent commands for checking for descrepancies in error files.
 
+Check `man mpiexec` for help on how to use OpenMPI.
+
 ### Checking for added/removed lines
 Check for log lines which have been added or removed for an error file `errorfile.log`:
 ```
