@@ -43,17 +43,16 @@ mutShrinkProbability = 0.45608542
 
 treeHeightMax = 17
 treeHeightMaxInit = 8
-asciiMin = 32
-asciiMax = 126
+printableAsciiMin = 32
+printableAsciiMax = 126
 
 # OpenMPI parameters
-mpiSizeMin = 2
-comm = MPI.COMM_WORLD
-size = comm.Get_size()
-rank = comm.Get_rank()
-name = MPI.Get_processor_name()
-nWorkerNodes = size - 1
-typeMap = {
+mpiSizeMin = 2  # Need at least two nodes for master-worker architecture
+mpiComm = MPI.COMM_WORLD
+mpiSize = mpiComm.Get_size()
+mpiRank = mpiComm.Get_rank()
+nWorkerNodes = mpiSize - 1
+mpiTypeMap = {
     np.dtype("int_"): MPI.LONG,
     np.dtype("float_"): MPI.DOUBLE,
 }
@@ -72,7 +71,7 @@ class MpiTag(enum.IntEnum):
     REGEX_PATTERN = 1
 
 
-class Node(enum.IntEnum):
+class MpiNode(enum.IntEnum):
     MASTER = 0
 
 
@@ -125,7 +124,7 @@ def escape(pattern):
     return pattern.translate({iChar: f"\\{chr(iChar)}" for iChar in b"()[]{}?*+-|^$\\.&~#"})
 
 
-allowedCharacters = [escape(chr(i)) for i in range(asciiMin, asciiMax + 1)]
+allowedCharacters = [escape(chr(i)) for i in range(printableAsciiMin, printableAsciiMax + 1)]
 nAllowedCharacters = len(allowedCharacters)
 
 
@@ -274,14 +273,14 @@ class RandomPrintableAsciiCode:
     returns = int
 
     def ephemeralConstant():
-        return random.randint(asciiMin, asciiMax)
+        return random.randint(printableAsciiMin, printableAsciiMax)
 
 
 class RandomCharacter:
     returns = str
 
     def ephemeralConstant():
-        return escape(chr(random.randint(asciiMin, asciiMax)))
+        return escape(chr(random.randint(printableAsciiMin, printableAsciiMax)))
 
 
 class RandomFloat:
@@ -629,8 +628,8 @@ def generatePatternString(targetString):
 
 # Main
 def main(argv):
-    if size < mpiSizeMin:
-        print(f"Error: Needs at least {mpiSizeMin} mpi nodes (current size: {size})")
+    if mpiSize < mpiSizeMin:
+        print(f"Error: Needs at least {mpiSizeMin} mpi nodes (current mpiSize: {mpiSize})")
         return 1
 
     if len(argv) < 2:
@@ -646,16 +645,16 @@ def main(argv):
         print(f"Error when running command '{' '.join(grepVersionCmd)}'")
         return 1
 
-    for datatype in typeMap:
+    for datatype in mpiTypeMap:
         assert (
-            datatype.itemsize == typeMap[datatype].Get_size()
-        ), f"Datatype size mismatch: data type '{datatype.name}' has size {datatype.itemsize} while '{typeMap[datatype].name}' has size {typeMap[datatype].Get_size()}. Please adjust the typeMap parameter."
+            datatype.itemsize == mpiTypeMap[datatype].Get_size()
+        ), f"Datatype mpiSize mismatch: data type '{datatype.name}' has mpiSize {datatype.itemsize} while '{mpiTypeMap[datatype].name}' has mpiSize {mpiTypeMap[datatype].Get_size()}. Please adjust the mpiTypeMap parameter."
 
     inputFiles.extend(argv[1:])
     nInputFiles = len(inputFiles)
 
     # Load input files
-    if rank == Node.MASTER:
+    if mpiRank == MpiNode.MASTER:
         print(f"[{time.time() - timeStart:.3f}] Loading input files...")
         fileContents = [None] * nInputFiles
         nLines = 0
@@ -701,17 +700,17 @@ def main(argv):
     else:
         fileContentsConcatenated = None
 
-    fileContentsConcatenated = comm.bcast(fileContentsConcatenated, root=Node.MASTER)
+    fileContentsConcatenated = mpiComm.bcast(fileContentsConcatenated, root=MpiNode.MASTER)
 
     # Generate regex patterns using EA
-    if rank == Node.MASTER:
+    if mpiRank == MpiNode.MASTER:
         iLine = 0
-        for iNode in range(1, size):
+        for iNode in range(1, mpiSize):
             while True:
                 try:
                     targetString = fileContentsConcatenated[iLine]
                 except IndexError:
-                    comm.send(None, dest=iNode, tag=MpiTag.LINE_INDEX)
+                    mpiComm.send(None, dest=iNode, tag=MpiTag.LINE_INDEX)
                     break
 
                 for patternString in patterns:
@@ -723,7 +722,7 @@ def main(argv):
                         break
                 else:
                     print(f"[{time.time() - timeStart:.3f}] Generating pattern to match string: '{targetString}'")
-                    comm.send(iLine, dest=iNode, tag=MpiTag.LINE_INDEX)
+                    mpiComm.send(iLine, dest=iNode, tag=MpiTag.LINE_INDEX)
                     iLine += 1
                     break
                 iLine += 1
@@ -752,7 +751,7 @@ def main(argv):
                     break
             else:
                 status = MPI.Status()
-                patternString = comm.recv(source=MPI.ANY_SOURCE, tag=MpiTag.REGEX_PATTERN, status=status)
+                patternString = mpiComm.recv(source=MPI.ANY_SOURCE, tag=MpiTag.REGEX_PATTERN, status=status)
                 if patternString is None:
                     iNodesFinished[status.source - 1] = True
                     if sum(iNodesFinished) == nWorkerNodes:
@@ -764,73 +763,73 @@ def main(argv):
                             print(
                                 f"[{time.time() - timeStart:.3f}] Generating pattern to match string: '{targetString}'"
                             )
-                    comm.send(iLine, dest=status.source, tag=MpiTag.LINE_INDEX)
+                    mpiComm.send(iLine, dest=status.source, tag=MpiTag.LINE_INDEX)
                     patterns[patternString] = re.compile(patternString)
             iLine += 1
     else:
         while True:
             try:
-                iLine = int(comm.recv(source=Node.MASTER, tag=MpiTag.LINE_INDEX))
+                iLine = int(mpiComm.recv(source=MpiNode.MASTER, tag=MpiTag.LINE_INDEX))
                 targetString = fileContentsConcatenated[iLine]
             except (IndexError, TypeError):
-                comm.send(None, dest=Node.MASTER, tag=MpiTag.REGEX_PATTERN)
+                mpiComm.send(None, dest=MpiNode.MASTER, tag=MpiTag.REGEX_PATTERN)
                 break
             else:
                 patternString = generatePatternString(targetString)
-                comm.send(patternString, dest=Node.MASTER, tag=MpiTag.REGEX_PATTERN)
+                mpiComm.send(patternString, dest=MpiNode.MASTER, tag=MpiTag.REGEX_PATTERN)
 
     # Calculate frequency means and standard deviations
-    if rank == Node.MASTER:
+    if mpiRank == MpiNode.MASTER:
         print(f"[{time.time() - timeStart:.3f}] Calculating frequency means and standard deviations...")
         patternStringList = list(patterns.keys())
         iPatterns = np.linspace(0, len(patternStringList) - 1, len(patternStringList), dtype=np.int_)
     else:
         patternStringList = None
         iPatterns = None
-    patternStringList = comm.bcast(patternStringList, root=Node.MASTER)
+    patternStringList = mpiComm.bcast(patternStringList, root=MpiNode.MASTER)
 
     nPatterns = len(patternStringList)
-    nPatternsLocal = np.array([nPatterns // size] * size, dtype=np.int_)
-    nPatternsLocal[: (nPatterns % size)] += 1
-    iPatternsLocal = np.zeros(nPatternsLocal[rank], dtype=np.int_)
+    nPatternsLocal = np.array([nPatterns // mpiSize] * mpiSize, dtype=np.int_)
+    nPatternsLocal[: (nPatterns % mpiSize)] += 1
+    iPatternsLocal = np.zeros(nPatternsLocal[mpiRank], dtype=np.int_)
 
-    displacement = [0] * size
-    for iNode in range(1, size):
+    displacement = [0] * mpiSize
+    for iNode in range(1, mpiSize):
         displacement[iNode] = displacement[iNode - 1] + nPatternsLocal[iNode - 1]
 
-    comm.Scatterv(
-        (iPatterns, nPatternsLocal, displacement, typeMap[iPatternsLocal.dtype]), iPatternsLocal, root=Node.MASTER
+    mpiComm.Scatterv(
+        (iPatterns, nPatternsLocal, displacement, mpiTypeMap[iPatternsLocal.dtype]), iPatternsLocal, root=MpiNode.MASTER
     )
-    comm.Barrier()
+    mpiComm.Barrier()
 
-    frequencies = [None] * nPatternsLocal[rank]
-    for i in range(nPatternsLocal[rank]):
+    frequencies = [None] * nPatternsLocal[mpiRank]
+    for i in range(nPatternsLocal[mpiRank]):
         frequencies[i] = countFileMatches(patternStringList[iPatternsLocal[i]], inputFiles)
     frequencies = np.array(frequencies, dtype=np.float_)
 
     frequencyMeansLocal = frequencies.mean(axis=1)
     frequencyStddevsLocal = frequencies.std(axis=1)
 
-    if rank == Node.MASTER:
+    if mpiRank == MpiNode.MASTER:
         frequencyMeans = np.zeros(nPatterns, dtype=np.float_)
         frequencyStddevs = np.zeros(nPatterns, dtype=np.float_)
     else:
         frequencyMeans = None
         frequencyStddevs = None
 
-    comm.Gatherv(
+    mpiComm.Gatherv(
         frequencyMeansLocal,
-        (frequencyMeans, nPatternsLocal, displacement, typeMap[frequencyMeansLocal.dtype]),
-        root=Node.MASTER,
+        (frequencyMeans, nPatternsLocal, displacement, mpiTypeMap[frequencyMeansLocal.dtype]),
+        root=MpiNode.MASTER,
     )
-    comm.Gatherv(
+    mpiComm.Gatherv(
         frequencyStddevsLocal,
-        (frequencyStddevs, nPatternsLocal, displacement, typeMap[frequencyMeansLocal.dtype]),
-        root=Node.MASTER,
+        (frequencyStddevs, nPatternsLocal, displacement, mpiTypeMap[frequencyMeansLocal.dtype]),
+        root=MpiNode.MASTER,
     )
 
     # Write results to disk
-    if rank == Node.MASTER:
+    if mpiRank == MpiNode.MASTER:
         print(f"[{time.time() - timeStart:.3f}] Writing results to disk...")
         with open(outputFilenamePatterns, "w") as outputFilePatterns:
             with open(outputFilenameFrequencies, "w") as outputFileFrequencies:
