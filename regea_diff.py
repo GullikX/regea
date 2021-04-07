@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import collections
 import enum
 from mpi4py import MPI
 import numpy as np
@@ -13,8 +14,8 @@ threshold = 1.0  # Number of standard deviations
 
 grepCmd = ["rg", "--pcre2", "--no-multiline"]
 grepVersionCmd = grepCmd + ["--version"]
-grepCheckMatchCmd = grepCmd + ["--quiet", "--"]
 grepCountMatchesCmd = grepCmd + ["--count", "--with-filename", "--include-zero", "--"]
+grepListMatchesCmd = grepCmd + ["--no-filename", "--no-line-number", "--"]
 
 # OpenMPI parameters
 mpiComm = MPI.COMM_WORLD
@@ -56,11 +57,24 @@ def countFileMatches(patternString, filenames):
     return nMatches
 
 
+def listFileMatches(patternString, filenames):
+    assert len(filenames) > 0
+    process = subprocess.Popen(
+        grepCountMatchesCmd + [patternString] + filenames,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    output = process.communicate()
+    assert len(output[Stream.STDERR]) == 0, f"{output[Stream.STDERR].decode()}"
+    matchList = list(filter(None, output[Stream.STDOUT].decode().splitlines()))
+    return matchList
+
+
 def countStddevs(mean, stddev, value):
-    try:
-        return abs(value - mean) / stddev
-    except ZeroDivisionError:
+    if stddev == 0.0:
         return float("inf")
+    else:
+        return abs(value - mean) / stddev
 
 
 def main(argv):
@@ -132,25 +146,27 @@ def main(argv):
     for i in range(nPatternsLocal[mpiRank]):
         patterns[patternStringList[iPatternsLocal[i]]] = re.compile(patternStringList[iPatternsLocal[i]])
 
-    referenceFrequencies = [None] * nPatternsLocal[mpiRank]
-    errorFrequencies = [None] * nPatternsLocal[mpiRank]
+    referenceFrequenciesLocal = [None] * nPatternsLocal[mpiRank]
+    errorFrequenciesLocal = np.zeros(nPatternsLocal[mpiRank], dtype=np.int_)
     for i in range(nPatternsLocal[mpiRank]):
         frequencies = countFileMatches(patternStringList[iPatternsLocal[i]], inputFiles)
-        errorFrequencies[i] = frequencies[errorFile]
+        errorFrequenciesLocal[i] = frequencies[errorFile]
         del frequencies[errorFile]
-        referenceFrequencies[i] = list(frequencies.values())
+        referenceFrequenciesLocal[i] = list(frequencies.values())
 
-    referenceFrequencies = np.array(referenceFrequencies, dtype=np.float_)
+    referenceFrequenciesLocal = np.array(referenceFrequenciesLocal, dtype=np.float_)
 
-    frequencyMeansLocal = referenceFrequencies.mean(axis=1)
-    frequencyStddevsLocal = referenceFrequencies.std(axis=1)
+    frequencyMeansLocal = referenceFrequenciesLocal.mean(axis=1)
+    frequencyStddevsLocal = referenceFrequenciesLocal.std(axis=1)
 
     if mpiRank == Node.MASTER:
         frequencyMeans = np.zeros(nPatterns, dtype=np.float_)
         frequencyStddevs = np.zeros(nPatterns, dtype=np.float_)
+        errorFrequencies = np.zeros(nPatterns, dtype=np.float_)
     else:
         frequencyMeans = None
         frequencyStddevs = None
+        errorFrequencies = None
 
     mpiComm.Gatherv(
         frequencyMeansLocal,
@@ -159,7 +175,12 @@ def main(argv):
     )
     mpiComm.Gatherv(
         frequencyStddevsLocal,
-        (frequencyStddevs, nPatternsLocal, displacement, mpiTypeMap[frequencyMeansLocal.dtype]),
+        (frequencyStddevs, nPatternsLocal, displacement, mpiTypeMap[frequencyStddevsLocal.dtype]),
+        root=Node.MASTER,
+    )
+    mpiComm.Gatherv(
+        errorFrequenciesLocal,
+        (errorFrequencies, nPatternsLocal, displacement, mpiTypeMap[errorFrequenciesLocal.dtype]),
         root=Node.MASTER,
     )
 
@@ -175,88 +196,82 @@ def main(argv):
         linesMatchedLocal, (linesMatched, len(errorFileContents), mpiTypeMap[linesMatchedLocal.dtype]), op=MPI.MAX
     )
     linesMatched = linesMatched.astype(np.bool_)
-
-    if mpiRank == Node.MASTER:
-        print(linesMatched)
-        print(sum(linesMatched) / len(linesMatched))
-
-    print(f"node {mpiRank} exiting")
-    return 0
+    unmatchedLines = collections.Counter(
+        np.array(errorFileContents, dtype=object)[~linesMatched]
+    )  # TODO: only needed on master
 
     # Generate diff
-    print(f"[{time.time() - timeStart:.3f}] Generating diff...")
-    unmatchedLines = set()
-    nUnmatchedLineOccurances = {}
-    diffFileContents = {}
+    if mpiRank == Node.MASTER:
+        print(f"[{time.time() - timeStart:.3f}] Generating diff...")
+        diffFileContents = {}
 
-    for iLine in range(len(errorFileContents)):  # TODO: from collections import Counter
-        if not linesMatched[iLine]:
-            nUnmatchedLineOccurances[errorFileContents[iLine]] = errorFileContents.count(errorFileContents[iLine])
-            unmatchedLines.add(errorFileContents[iLine])
-
-    for iPattern in range(len(patternStrings)):
-        if not (
-            errorFrequencies[patternStrings[iPattern]]
-            > frequencyMeans[iPattern] + threshold * frequencyStddevs[iPattern]  # TODO: countStddevs(...)
-            or errorFrequencies[patternStrings[iPattern]]
-            < frequencyMeans[iPattern] - threshold * frequencyStddevs[iPattern]
-        ):
-            continue
-
-        occuranceMap = {}
-
-        for match in patterns[iPattern].finditer("\n".join(errorFileContents)):  # TODO: use ripgrep
-            matchedString = match.string[match.span()[0] : match.span()[1]]  # TODO: from collections import Counter
-            if matchedString not in occuranceMap:
-                occuranceMap[matchedString] = 0.0
-            occuranceMap[matchedString] += 1.0
-
-        for iFile in range(len(referenceFileContents)):
-            for match in patterns[iPattern].finditer("\n".join(referenceFileContents[iFile])):
-                matchedString = match.string[match.span()[0] : match.span()[1]]
-                if matchedString not in occuranceMap:
-                    occuranceMap[matchedString] = 0.0
-                occuranceMap[matchedString] -= 1.0 / len(referenceFiles)
-
-        diffFileContents[patternStrings[iPattern]] = set()  # TODO: Make part of "write results to disk"
-        for line in occuranceMap:
-            if occuranceMap[line] > 0:
-                diffFileContents[patternStrings[iPattern]].add(f"> {line} (x{occuranceMap[line]:.3f})")
-            elif occuranceMap[line] < 0:
-                diffFileContents[patternStrings[iPattern]].add(f"< {line} (x{-occuranceMap[line]:.3f})")
-
-    diffFileContentsSorted = dict(
-        sorted(
-            diffFileContents.items(),
-            key=lambda item: countStddevs(
-                frequencyMeansMap[item[0]], frequencyStddevsMap[item[0]], errorFrequencies[item[0]]
-            ),
-            reverse=True,
-        )
-    )
-
-    # Write results to disk
-    outputFilename = f"{errorFile}.{outputFilenameSuffix}"
-    print(f"[{time.time() - timeStart:.3f}] Writing results to '{outputFilename}'...")
-    with open(outputFilename, "w") as diffFile:  # TODO: only write to the file once
-        if unmatchedLines:
-            unmatchedLinesSorted = sorted(
-                list(unmatchedLines), key=lambda item: nUnmatchedLineOccurances[item], reverse=True
-            )
-            diffFile.write("# Unmatched lines\n")
-            for line in unmatchedLinesSorted:
-                diffFile.write(f"> {line} (x{nUnmatchedLineOccurances[line]})\n")
-            diffFile.write("\n\n")
-        for patternString in diffFileContentsSorted:
-            if not diffFileContents[patternString]:
+        for iPattern in range(len(patternStringList)):
+            if (
+                countStddevs(frequencyMeans[iPattern], frequencyStddevs[iPattern], errorFrequencies[iPattern])
+                < threshold
+            ):
                 continue
-            diffFile.write(
-                f"# {patternString}, (mean: {frequencyMeansMap[patternString]:.3f}, stddev: {frequencyStddevsMap[patternString]:.3f}, errorfreq: {errorFrequencies[patternString]}, stddevs from mean: {countStddevs(frequencyMeansMap[patternString], frequencyStddevsMap[patternString], errorFrequencies[patternString]):.3f})\n"
-            )
-            diffFile.write("\n".join(sorted(list(diffFileContents[patternString]))))
-            diffFile.write("\n\n")
 
-    print(f"[{time.time() - timeStart:.3f}] Done.")
+            diffFileContents[patternStringList[iPattern]] = set()  # TODO: Make part of "write results to disk"
+
+            errorFileMatches = collections.Counter(
+                listFileMatches(
+                    patternStringList[iPattern],
+                    [
+                        errorFile,
+                    ],
+                )
+            )
+            referenceFileMatches = collections.Counter(listFileMatches(patternStringList[iPattern], referenceFiles))
+
+            for match in set(errorFileMatches).difference(set(referenceFileMatches)):
+                diffFileContents[patternStringList[iPattern]].add(f"> {match} (x{errorFileMatches[match]:.3f})")
+
+            for match in set(referenceFileMatches).difference(set(errorFileMatches)):
+                diffFileContents[patternStringList[iPattern]].add(
+                    f"< {match} (x{referenceFileMatches[match] / len(referenceFiles):.3f})"
+                )
+
+            for match in set(referenceFileMatches).union(set(errorFileMatches)):
+                count = errorFileMatches[match] * len(referenceFiles) - referenceFileMatches[match]
+                if count > 0:
+                    diffFileContents[patternStringList[iPattern]].add(f"> {match} (x{count / len(referenceFiles):.3f})")
+                elif count < 0:
+                    diffFileContents[patternStringList[iPattern]].add(
+                        f"< {match} (x{-count / len(referenceFiles):.3f})"
+                    )
+
+        # diffFileContentsSorted = dict(
+        #    sorted(
+        #        diffFileContents.items(),
+        #        key=lambda item: countStddevs(
+        #            frequencyMeansMap[item[0]], frequencyStddevsMap[item[0]], errorFrequencies[item[0]]
+        #        ),
+        #        reverse=True,
+        #    )
+        # )
+        diffFileContentsSorted = diffFileContents  # TODO
+
+        # Write results to disk
+        outputFilename = f"{errorFile}.{outputFilenameSuffix}"
+        print(f"[{time.time() - timeStart:.3f}] Writing results to '{outputFilename}'...")
+        with open(outputFilename, "w") as diffFile:  # TODO: only write to the file once
+            if unmatchedLines:
+                unmatchedLinesSorted = sorted(list(unmatchedLines), key=lambda item: unmatchedLines[item], reverse=True)
+                diffFile.write("# Unmatched lines\n")
+                for line in unmatchedLinesSorted:
+                    diffFile.write(f"> {line} (x{unmatchedLines[line]})\n")
+                diffFile.write("\n\n")
+            for patternString in diffFileContentsSorted:
+                if not diffFileContents[patternString]:
+                    continue
+                # diffFile.write(  # TODO
+                #    f"# {patternString}, (mean: {frequencyMeansMap[patternString]:.3f}, stddev: {frequencyStddevsMap[patternString]:.3f}, errorfreq: {errorFrequencies[patternString]}, stddevs from mean: {countStddevs(frequencyMeansMap[patternString], frequencyStddevsMap[patternString], errorFrequencies[patternString]):.3f})\n"
+                # )
+                diffFile.write("\n".join(sorted(list(diffFileContents[patternString]))))
+                diffFile.write("\n\n")
+
+        print(f"[{time.time() - timeStart:.3f}] Done.")
 
 
 if __name__ == "__main__":
