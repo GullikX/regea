@@ -47,7 +47,7 @@ printableAsciiMin = 32
 printableAsciiMax = 126
 
 # OpenMPI parameters
-mpiSizeMin = 2  # Need at least two nodes for master-worker architecture
+mpiSizeMin = 2  # Need at least two nodes for master-worker setup
 mpiComm = MPI.COMM_WORLD
 mpiSize = mpiComm.Get_size()
 mpiRank = mpiComm.Get_rank()
@@ -486,7 +486,7 @@ def generatePatternString(targetString):
 
     population.extend([None] * (populationSize - 1))
     for iIndividual in range(1, populationSize):
-        population[iIndividual] = copy.deepcopy(population[0])
+        population[iIndividual] = copy.deepcopy(population[0])  # TODO: add randomness
 
     hallOfFame = deap.tools.HallOfFame(1)
     hallOfFame.update(population)
@@ -577,7 +577,7 @@ def generatePatternString(targetString):
 
     nFilesWithMatches = countFilesWithMatches(patternStringBest, inputFiles)
 
-    # Pad beginning
+    # Pad beginning TODO: add some upper limit to the amount of padding
     padMin = 0
     while (
         checkMatch(f".{{{padMin + 1}}}" + patternStringBest, targetString)
@@ -833,7 +833,7 @@ def main(argv):
         print(f"[{time.time() - timeStart:.3f}] Writing results to disk...")
         with open(outputFilenamePatterns, "w") as outputFilePatterns:
             with open(outputFilenameFrequencies, "w") as outputFileFrequencies:
-                for iPattern in range(len(patternStringList)):
+                for iPattern in range(len(patternStringList)):  # TODO: only write once per file
                     outputFilePatterns.write(f"{patternStringList[iPattern]}\n")
                     outputFileFrequencies.write(f"{frequencyMeans[iPattern]} {frequencyStddevs[iPattern]}\n")
 

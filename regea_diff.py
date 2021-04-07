@@ -20,7 +20,7 @@ def countStddevs(mean, stddev, value):
         return float("inf")
 
 
-def main(argv):
+def main(argv):  # TODO: parallelize
     if len(sys.argv) < 3:
         print(f"usage: {sys.argv[0]} ERRORFILE REFERENCEFILE...")
         return 1
@@ -146,7 +146,7 @@ def main(argv):
     # Write results to disk
     outputFilename = f"{errorFile}.{outputFilenameSuffix}"
     print(f"[{time.time() - timeStart:.3f}] Writing results to '{outputFilename}'...")
-    with open(outputFilename, "w") as diffFile:
+    with open(outputFilename, "w") as diffFile:  # TODO: only write to the file once
         if unmatchedLines:
             unmatchedLinesSorted = sorted(
                 list(unmatchedLines), key=lambda item: nUnmatchedLineOccurances[item], reverse=True

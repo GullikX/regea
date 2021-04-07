@@ -81,7 +81,7 @@ class Rule:
         return not self.__eq__(other)
 
 
-def main(argv):
+def main(argv):  # TODO: parallelize
     if len(sys.argv) < 3:
         print(f"usage: {sys.argv[0]} ERRORFILE REFERENCEFILE...")
         return 1
@@ -172,7 +172,7 @@ def main(argv):
     errorFileContentsJoined = "\n".join(errorFileContents)
     outputFilename = f"{errorFile}.{outputFilenameSuffix}"
     print(f"[{time.time() - timeStart:.3f}] Writing results to '{outputFilename}'...")
-    with open(outputFilename, "w") as orderingFile:
+    with open(outputFilename, "w") as orderingFile:  # TODO: only write to the file once
         for pattern in list(dict(sorted(violatedRulesPerPattern.items(), key=lambda item: len(item[1]), reverse=True)))[
             :nPatternsToShow
         ]:
