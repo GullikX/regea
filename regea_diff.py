@@ -181,7 +181,7 @@ def main(argv):
     if mpiRank == Node.MASTER:
         frequencyMeans = np.zeros(nPatterns, dtype=np.float_)
         frequencyStddevs = np.zeros(nPatterns, dtype=np.float_)
-        errorFrequencies = np.zeros(nPatterns, dtype=np.float_)
+        errorFrequencies = np.zeros(nPatterns, dtype=np.int_)
         bPatternsDeviating = np.zeros(nPatterns, dtype=np.bool_)
     else:
         frequencyMeans = None
