@@ -3,6 +3,7 @@ import enum
 import numpy as np
 import random
 import regex
+import subprocess
 import sys
 import time
 
@@ -12,10 +13,21 @@ iterationTimeLimit = 600  # seconds
 nPatternsToShow = 100
 ruleValidityThreshold = 0.90
 
+grepCmd = ["rg", "--pcre2", "--no-multiline"]
+grepVersionCmd = grepCmd + ["--version"]
+grepListMatchesCmd = grepCmd + ["--no-filename", "--no-line-number", "--"]
+
 # Global variables
 timeStart = time.time()
 
 
+# Enums
+class Stream(enum.IntEnum):
+    STDOUT = 0
+    STDERR = 1
+
+
+# Classes
 class RuleType(enum.IntEnum):
     BEFORE_ALL = 0
     AFTER_ALL = 1
@@ -81,6 +93,20 @@ class Rule:
         return not self.__eq__(other)
 
 
+# Util functions
+def listFileMatches(patternString, filenames):
+    assert len(filenames) > 0
+    process = subprocess.Popen(
+        grepListMatchesCmd + [patternString] + filenames,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    output = process.communicate()
+    assert len(output[Stream.STDERR]) == 0, f"{output[Stream.STDERR].decode()}"
+    matchList = list(filter(None, output[Stream.STDOUT].decode().splitlines()))
+    return matchList
+
+
 def main(argv):  # TODO: parallelize
     if len(sys.argv) < 3:
         print(f"usage: {sys.argv[0]} ERRORFILE REFERENCEFILE...")
@@ -115,27 +141,38 @@ def main(argv):  # TODO: parallelize
         patterns[iPattern] = regex.compile(patternStrings[iPattern], regex.MULTILINE)
 
     # Convert log entries to lists of pattern indices
+    # TODO: What to do for lines which are matched by multiple patterns?
     print(f"[{time.time() - timeStart:.3f}] Checking file ordering...")
-    errorPatternIndices = np.array([-1] * len(errorFileContents), dtype=np.int64)
+
+    errorPatternIndicesMap = {}
+    for iPattern in range(len(patternStrings)):
+        errorPatternIndicesMap.update(dict.fromkeys(listFileMatches(patternStrings[iPattern], [errorFile]), iPattern))
+
+    errorPatternIndices = np.array([-1] * len(errorFileContents), dtype=np.int_)
     for iLine in range(len(errorFileContents)):
-        for iPattern in range(len(patterns)):
-            if patterns[iPattern].match(errorFileContents[iLine]) is not None:
-                errorPatternIndices[iLine] = iPattern
-                break
+        if errorFileContents[iLine] in errorPatternIndicesMap:
+            errorPatternIndices[iLine] = errorPatternIndicesMap[errorFileContents[iLine]]
     errorPatternIndices = errorPatternIndices[errorPatternIndices != -1]
     assert len(np.where(errorPatternIndices == -1)[0]) == 0
 
+    referencePatternIndicesMap = {}
+    for iPattern in range(len(patternStrings)):
+        referencePatternIndicesMap.update(
+            dict.fromkeys(listFileMatches(patternStrings[iPattern], referenceFiles), iPattern)
+        )
+
     referencePatternIndices = [None] * len(referenceFiles)
     for iFile in range(len(referenceFiles)):
-        referencePatternIndices[iFile] = np.array([-1] * len(referenceFileContents[iFile]), dtype=np.int64)
+        referencePatternIndices[iFile] = np.array([-1] * len(referenceFileContents[iFile]), dtype=np.int_)
         for iLine in range(len(referenceFileContents[iFile])):
-            for iPattern in range(len(patterns)):
-                if patterns[iPattern].match(referenceFileContents[iFile][iLine]) is not None:
-                    referencePatternIndices[iFile][iLine] = iPattern
-                    break
-        assert (
-            len(np.where(referencePatternIndices[iFile] == -1)[0]) == 0
-        ), f"Some lines in the reference file '{referenceFiles[iFile]}' were not matched by any pattern. Does the training result '{inputFilenamePatterns}' really correspond to the specified reference files?"
+            if referenceFileContents[iFile][iLine] in referencePatternIndicesMap:
+                referencePatternIndices[iFile][iLine] = referencePatternIndicesMap[referenceFileContents[iFile][iLine]]
+        # assert (
+        #    len(np.where(referencePatternIndices[iFile] == -1)[0]) == 0
+        # ), f"Some lines in the reference file '{referenceFiles[iFile]}' were not matched by any pattern. Does the training result '{inputFilenamePatterns}' really correspond to the specified reference files?"
+
+    print(f"[{time.time() - timeStart:.3f}] ok")
+    return 0
 
     print(f"[{time.time() - timeStart:.3f}] Generating ordering rules for {iterationTimeLimit} seconds...")
     rules = set()
