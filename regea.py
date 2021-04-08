@@ -778,64 +778,11 @@ def main(argv):
                 patternString = generatePatternString(targetString)
                 mpiComm.send(patternString, dest=MpiNode.MASTER, tag=MpiTag.REGEX_PATTERN)
 
-    # Calculate frequency means and standard deviations
-    if mpiRank == MpiNode.MASTER:
-        print(f"[{time.time() - timeStart:.3f}] Calculating frequency means and standard deviations...")
-        patternStringList = list(patterns.keys())
-        iPatterns = np.linspace(0, len(patternStringList) - 1, len(patternStringList), dtype=np.int_)
-    else:
-        patternStringList = None
-        iPatterns = None
-    patternStringList = mpiComm.bcast(patternStringList, root=MpiNode.MASTER)
-
-    nPatterns = len(patternStringList)
-    nPatternsLocal = np.array([nPatterns // mpiSize] * mpiSize, dtype=np.int_)
-    nPatternsLocal[: (nPatterns % mpiSize)] += 1
-    iPatternsLocal = np.zeros(nPatternsLocal[mpiRank], dtype=np.int_)
-
-    displacement = [0] * mpiSize
-    for iNode in range(1, mpiSize):
-        displacement[iNode] = displacement[iNode - 1] + nPatternsLocal[iNode - 1]
-
-    mpiComm.Scatterv(
-        (iPatterns, nPatternsLocal, displacement, mpiTypeMap[iPatternsLocal.dtype]), iPatternsLocal, root=MpiNode.MASTER
-    )
-    mpiComm.Barrier()
-
-    frequencies = [None] * nPatternsLocal[mpiRank]
-    for i in range(nPatternsLocal[mpiRank]):
-        frequencies[i] = countFileMatches(patternStringList[iPatternsLocal[i]], inputFiles)
-    frequencies = np.array(frequencies, dtype=np.float_)
-
-    frequencyMeansLocal = frequencies.mean(axis=1)
-    frequencyStddevsLocal = frequencies.std(axis=1)
-
-    if mpiRank == MpiNode.MASTER:
-        frequencyMeans = np.zeros(nPatterns, dtype=np.float_)
-        frequencyStddevs = np.zeros(nPatterns, dtype=np.float_)
-    else:
-        frequencyMeans = None
-        frequencyStddevs = None
-
-    mpiComm.Gatherv(
-        frequencyMeansLocal,
-        (frequencyMeans, nPatternsLocal, displacement, mpiTypeMap[frequencyMeansLocal.dtype]),
-        root=MpiNode.MASTER,
-    )
-    mpiComm.Gatherv(
-        frequencyStddevsLocal,
-        (frequencyStddevs, nPatternsLocal, displacement, mpiTypeMap[frequencyMeansLocal.dtype]),
-        root=MpiNode.MASTER,
-    )
-
     # Write results to disk
     if mpiRank == MpiNode.MASTER:
         print(f"[{time.time() - timeStart:.3f}] Writing results to disk...")
         with open(outputFilenamePatterns, "w") as outputFilePatterns:
-            with open(outputFilenameFrequencies, "w") as outputFileFrequencies:
-                for iPattern in range(len(patternStringList)):  # TODO: only write once per file
-                    outputFilePatterns.write(f"{patternStringList[iPattern]}\n")
-                    outputFileFrequencies.write(f"{frequencyMeans[iPattern]} {frequencyStddevs[iPattern]}\n")
+            outputFilePatterns.write("\n".join(patterns) + "\n")
 
         print(f"[{time.time() - timeStart:.3f}] Done.")
 
