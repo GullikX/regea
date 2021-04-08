@@ -38,7 +38,7 @@ class MpiTag(enum.IntEnum):
     DIFF_FILE_CONTENTS = 0
 
 
-class Node(enum.IntEnum):
+class MpiNode(enum.IntEnum):
     MASTER = 0
 
 
@@ -122,18 +122,18 @@ def main(argv):
         ), f"Datatype mpiSize mismatch: data type '{datatype.name}' has mpiSize {datatype.itemsize} while '{mpiTypeMap[datatype].name}' has mpiSize {mpiTypeMap[datatype].Get_size()}. Please adjust the mpiTypeMap parameter."
 
     # Load training result
-    if mpiRank == Node.MASTER:
+    if mpiRank == MpiNode.MASTER:
         print(f"[{time.time() - timeStart:.3f}] Loading training result...")
         patternStringList = []
         with open(inputFilenamePatterns, "r") as inputFilePatterns:
             patternStringList.extend(inputFilePatterns.read().splitlines())
     else:
         patternStringList = None
-    patternStringList = mpiComm.bcast(patternStringList, root=Node.MASTER)
+    patternStringList = mpiComm.bcast(patternStringList, root=MpiNode.MASTER)
     nPatterns = len(patternStringList)
 
     # Check for discrepancies
-    if mpiRank == Node.MASTER:
+    if mpiRank == MpiNode.MASTER:
         print(f"[{time.time() - timeStart:.3f}] Compiling regex patterns...")
         iPatterns = np.linspace(0, nPatterns - 1, nPatterns, dtype=np.int_)
     else:
@@ -148,7 +148,7 @@ def main(argv):
         displacement[iNode] = displacement[iNode - 1] + nPatternsLocal[iNode - 1]
 
     mpiComm.Scatterv(
-        (iPatterns, nPatternsLocal, displacement, mpiTypeMap[iPatternsLocal.dtype]), iPatternsLocal, root=Node.MASTER
+        (iPatterns, nPatternsLocal, displacement, mpiTypeMap[iPatternsLocal.dtype]), iPatternsLocal, root=MpiNode.MASTER
     )
     mpiComm.Barrier()
 
@@ -156,7 +156,7 @@ def main(argv):
     for i in range(nPatternsLocal[mpiRank]):
         patterns[patternStringList[iPatternsLocal[i]]] = re.compile(patternStringList[iPatternsLocal[i]])
 
-    if mpiRank == Node.MASTER:
+    if mpiRank == MpiNode.MASTER:
         print(f"[{time.time() - timeStart:.3f}] Calculating pattern match frequencies...")
     referenceFrequenciesLocal = [None] * nPatternsLocal[mpiRank]
     errorFrequenciesLocal = np.zeros(nPatternsLocal[mpiRank], dtype=np.int_)
@@ -178,7 +178,7 @@ def main(argv):
             countStddevs(frequencyMeansLocal[i], frequencyStddevsLocal[i], errorFrequenciesLocal[i]) > threshold
         )
 
-    if mpiRank == Node.MASTER:
+    if mpiRank == MpiNode.MASTER:
         frequencyMeans = np.zeros(nPatterns, dtype=np.float_)
         frequencyStddevs = np.zeros(nPatterns, dtype=np.float_)
         errorFrequencies = np.zeros(nPatterns, dtype=np.int_)
@@ -192,26 +192,26 @@ def main(argv):
     mpiComm.Gatherv(
         frequencyMeansLocal,
         (frequencyMeans, nPatternsLocal, displacement, mpiTypeMap[frequencyMeansLocal.dtype]),
-        root=Node.MASTER,
+        root=MpiNode.MASTER,
     )
     mpiComm.Gatherv(
         frequencyStddevsLocal,
         (frequencyStddevs, nPatternsLocal, displacement, mpiTypeMap[frequencyStddevsLocal.dtype]),
-        root=Node.MASTER,
+        root=MpiNode.MASTER,
     )
     mpiComm.Gatherv(
         errorFrequenciesLocal,
         (errorFrequencies, nPatternsLocal, displacement, mpiTypeMap[errorFrequenciesLocal.dtype]),
-        root=Node.MASTER,
+        root=MpiNode.MASTER,
     )
     mpiComm.Gatherv(
         bPatternsDeviatingLocal,
         (bPatternsDeviating, nPatternsLocal, displacement, mpiTypeMap[bPatternsDeviatingLocal.dtype]),
-        root=Node.MASTER,
+        root=MpiNode.MASTER,
     )
 
     # Check for unmatched lines
-    if mpiRank == Node.MASTER:
+    if mpiRank == MpiNode.MASTER:
         print(f"[{time.time() - timeStart:.3f}] Checking for unmatched lines...")
     bLinesMatched = np.zeros(len(errorFileContents), dtype=np.int_)  # Use int since MPI cannot reduce bool type
     bLinesMatchedLocal = np.zeros(len(errorFileContents), dtype=np.int_)
@@ -230,7 +230,7 @@ def main(argv):
     )  # TODO: only needed on master
 
     # Generate diff
-    if mpiRank == Node.MASTER:
+    if mpiRank == MpiNode.MASTER:
         print(f"[{time.time() - timeStart:.3f}] Generating diff file...")
         iPatternsDeviating = iPatterns[bPatternsDeviating]
         nPatternsDeviating = len(iPatternsDeviating)
@@ -238,7 +238,7 @@ def main(argv):
         iPatternsDeviating = None
         nPatternsDeviating = None
 
-    nPatternsDeviating = mpiComm.bcast(nPatternsDeviating, root=Node.MASTER)
+    nPatternsDeviating = mpiComm.bcast(nPatternsDeviating, root=MpiNode.MASTER)
     nPatternsDeviatingLocal = np.array([nPatternsDeviating // mpiSize] * mpiSize, dtype=np.int_)
     nPatternsDeviatingLocal[: (nPatternsDeviating % mpiSize)] += 1
     iPatternsDeviatingLocal = np.zeros(nPatternsDeviatingLocal[mpiRank], dtype=np.int_)
@@ -250,7 +250,7 @@ def main(argv):
     mpiComm.Scatterv(
         (iPatternsDeviating, nPatternsDeviatingLocal, displacementDeviating, mpiTypeMap[iPatternsDeviatingLocal.dtype]),
         iPatternsDeviatingLocal,
-        root=Node.MASTER,
+        root=MpiNode.MASTER,
     )
     mpiComm.Barrier()
 
@@ -278,14 +278,14 @@ def main(argv):
 
     # TODO: See if it's possible to use gather
     mpiComm.Barrier()
-    if mpiRank == Node.MASTER:
+    if mpiRank == MpiNode.MASTER:
         for iNode in range(1, mpiSize):
             diffFileContents.update(mpiComm.recv(source=iNode, tag=MpiTag.DIFF_FILE_CONTENTS))
     else:
-        mpiComm.send(diffFileContents, dest=Node.MASTER, tag=MpiTag.DIFF_FILE_CONTENTS)
+        mpiComm.send(diffFileContents, dest=MpiNode.MASTER, tag=MpiTag.DIFF_FILE_CONTENTS)
 
     # Write results to disk
-    if mpiRank == Node.MASTER:
+    if mpiRank == MpiNode.MASTER:
         outputFilename = f"{errorFile}.{outputFilenameSuffix}"
         print(f"[{time.time() - timeStart:.3f}] Writing results to '{outputFilename}'...")
 
