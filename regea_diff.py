@@ -150,6 +150,8 @@ def main(argv):
         print(f"[{time.time() - timeStart:.3f}] Calculating pattern match frequencies...")
     referenceFrequenciesLocal = [None] * nPatternsLocal[mpiRank]
     errorFrequenciesLocal = np.zeros(nPatternsLocal[mpiRank], dtype=np.int_)
+    iPatternsDeviatingLocal = np.zeros(nPatternsLocal[mpiRank], dtype=np.int_)
+
     for i in range(nPatternsLocal[mpiRank]):
         frequencies = countFileMatches(patternStringList[iPatternsLocal[i]], inputFiles)
         errorFrequenciesLocal[i] = frequencies[errorFile]
@@ -161,14 +163,21 @@ def main(argv):
     frequencyMeansLocal = referenceFrequenciesLocal.mean(axis=1)
     frequencyStddevsLocal = referenceFrequenciesLocal.std(axis=1)
 
+    for i in range(nPatternsLocal[mpiRank]):
+        iPatternsDeviatingLocal[i] = (
+            countStddevs(frequencyMeansLocal[i], frequencyStddevsLocal[i], errorFrequenciesLocal[i]) > threshold
+        )
+
     if mpiRank == Node.MASTER:
         frequencyMeans = np.zeros(nPatterns, dtype=np.float_)
         frequencyStddevs = np.zeros(nPatterns, dtype=np.float_)
         errorFrequencies = np.zeros(nPatterns, dtype=np.float_)
+        iPatternsDeviating = np.zeros(nPatterns, dtype=np.int_)
     else:
         frequencyMeans = None
         frequencyStddevs = None
         errorFrequencies = None
+        iPatternsDeviating = None
 
     mpiComm.Gatherv(
         frequencyMeansLocal,
@@ -185,10 +194,17 @@ def main(argv):
         (errorFrequencies, nPatternsLocal, displacement, mpiTypeMap[errorFrequenciesLocal.dtype]),
         root=Node.MASTER,
     )
+    mpiComm.Gatherv(
+        iPatternsDeviatingLocal,
+        (iPatternsDeviating, nPatternsLocal, displacement, mpiTypeMap[iPatternsDeviatingLocal.dtype]),
+        root=Node.MASTER,
+    )
 
     # Check for unmatched lines
     if mpiRank == Node.MASTER:
         print(f"[{time.time() - timeStart:.3f}] Checking for unmatched lines...")
+        print(f"Portion of patterns deviating: {sum(iPatternsDeviating) / nPatterns}")
+    return 0
     linesMatched = np.zeros(len(errorFileContents), dtype=np.int_)  # Use int since MPI cannot reduce bool type
     linesMatchedLocal = np.zeros(len(errorFileContents), dtype=np.int_)
     for i in range(nPatternsLocal[mpiRank]):
@@ -210,10 +226,7 @@ def main(argv):
         diffFileContents = {}
 
         for iPattern in range(len(patternStringList)):
-            if (
-                countStddevs(frequencyMeans[iPattern], frequencyStddevs[iPattern], errorFrequencies[iPattern])
-                < threshold
-            ):
+            if not iPatternsDeviating[iPattern]:
                 continue
 
             diffFileContents[patternStringList[iPattern]] = set()  # TODO: Make part of "write results to disk"
