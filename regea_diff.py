@@ -60,7 +60,7 @@ def countFileMatches(patternString, filenames):
 def listFileMatches(patternString, filenames):
     assert len(filenames) > 0
     process = subprocess.Popen(
-        grepCountMatchesCmd + [patternString] + filenames,
+        grepListMatchesCmd + [patternString] + filenames,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
