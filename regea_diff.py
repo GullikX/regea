@@ -124,7 +124,7 @@ def main(argv):
 
     # Check for discrepancies
     if mpiRank == Node.MASTER:
-        print(f"[{time.time() - timeStart:.3f}] Checking for discrepancies...")
+        print(f"[{time.time() - timeStart:.3f}] Compiling regex patterns...")
         iPatterns = np.linspace(0, nPatterns - 1, nPatterns, dtype=np.int_)
     else:
         iPatterns = None
@@ -146,6 +146,8 @@ def main(argv):
     for i in range(nPatternsLocal[mpiRank]):
         patterns[patternStringList[iPatternsLocal[i]]] = re.compile(patternStringList[iPatternsLocal[i]])
 
+    if mpiRank == Node.MASTER:
+        print(f"[{time.time() - timeStart:.3f}] Calculating pattern match frequencies...")
     referenceFrequenciesLocal = [None] * nPatternsLocal[mpiRank]
     errorFrequenciesLocal = np.zeros(nPatternsLocal[mpiRank], dtype=np.int_)
     for i in range(nPatternsLocal[mpiRank]):
@@ -185,6 +187,8 @@ def main(argv):
     )
 
     # Check for unmatched lines
+    if mpiRank == Node.MASTER:
+        print(f"[{time.time() - timeStart:.3f}] Checking for unmatched lines...")
     linesMatched = np.zeros(len(errorFileContents), dtype=np.int_)  # Use int since MPI cannot reduce bool type
     linesMatchedLocal = np.zeros(len(errorFileContents), dtype=np.int_)
     for i in range(nPatternsLocal[mpiRank]):
