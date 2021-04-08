@@ -18,6 +18,7 @@ grepCountMatchesCmd = grepCmd + ["--count", "--with-filename", "--include-zero",
 grepListMatchesCmd = grepCmd + ["--no-filename", "--no-line-number", "--"]
 
 # OpenMPI parameters
+mpiSizeMin = 2  # Need at least two nodes for master-worker setup
 mpiComm = MPI.COMM_WORLD
 mpiSize = mpiComm.Get_size()
 mpiRank = mpiComm.Get_rank()
@@ -33,6 +34,10 @@ timeStart = time.time()
 
 
 # Enums
+class MpiTag(enum.IntEnum):
+    DIFF_FILE_CONTENTS = 0
+
+
 class Node(enum.IntEnum):
     MASTER = 0
 
@@ -79,6 +84,10 @@ def countStddevs(mean, stddev, value):
 
 
 def main(argv):
+    if mpiSize < mpiSizeMin:
+        print(f"Error: Needs at least {mpiSizeMin} mpi nodes (current mpiSize: {mpiSize})")
+        return 1
+
     if len(sys.argv) < 3:
         print(f"usage: {sys.argv[0]} ERRORFILE REFERENCEFILE...")
         return 1
@@ -204,8 +213,6 @@ def main(argv):
     # Check for unmatched lines
     if mpiRank == Node.MASTER:
         print(f"[{time.time() - timeStart:.3f}] Checking for unmatched lines...")
-        print(f"Portion of patterns deviating: {sum(bPatternsDeviating) / nPatterns}")
-    return 0
     bLinesMatched = np.zeros(len(errorFileContents), dtype=np.int_)  # Use int since MPI cannot reduce bool type
     bLinesMatchedLocal = np.zeros(len(errorFileContents), dtype=np.int_)
     for i in range(nPatternsLocal[mpiRank]):
@@ -224,42 +231,63 @@ def main(argv):
 
     # Generate diff
     if mpiRank == Node.MASTER:
-        print(f"[{time.time() - timeStart:.3f}] Generating diff...")
-        diffFileContents = {}
+        print(f"[{time.time() - timeStart:.3f}] Generating diff file...")
+        iPatternsDeviating = iPatterns[bPatternsDeviating]
+        nPatternsDeviating = len(iPatternsDeviating)
+    else:
+        iPatternsDeviating = None
+        nPatternsDeviating = None
 
-        for iPattern in range(len(patternStringList)):
-            if not bPatternsDeviating[iPattern]:
-                continue
+    nPatternsDeviating = mpiComm.bcast(nPatternsDeviating, root=Node.MASTER)
+    nPatternsDeviatingLocal = np.array([nPatternsDeviating // mpiSize] * mpiSize, dtype=np.int_)
+    nPatternsDeviatingLocal[: (nPatternsDeviating % mpiSize)] += 1
+    iPatternsDeviatingLocal = np.zeros(nPatternsDeviatingLocal[mpiRank], dtype=np.int_)
 
-            diffFileContents[patternStringList[iPattern]] = set()  # TODO: Make part of "write results to disk"
+    displacementDeviating = [0] * mpiSize
+    for iNode in range(1, mpiSize):
+        displacementDeviating[iNode] = displacementDeviating[iNode - 1] + nPatternsDeviatingLocal[iNode - 1]
 
-            errorFileMatches = collections.Counter(
-                listFileMatches(
-                    patternStringList[iPattern],
-                    [
-                        errorFile,
-                    ],
-                )
-            )
-            referenceFileMatches = collections.Counter(listFileMatches(patternStringList[iPattern], referenceFiles))
+    mpiComm.Scatterv(
+        (iPatternsDeviating, nPatternsDeviatingLocal, displacementDeviating, mpiTypeMap[iPatternsDeviatingLocal.dtype]),
+        iPatternsDeviatingLocal,
+        root=Node.MASTER,
+    )
+    mpiComm.Barrier()
 
-            for match in set(errorFileMatches).difference(set(referenceFileMatches)):
-                diffFileContents[patternStringList[iPattern]].add(f"> {match} (x{errorFileMatches[match]:.3f})")
+    diffFileContents = {}
 
-            for match in set(referenceFileMatches).difference(set(errorFileMatches)):
-                diffFileContents[patternStringList[iPattern]].add(
-                    f"< {match} (x{referenceFileMatches[match] / len(referenceFiles):.3f})"
-                )
+    for i in range(nPatternsDeviatingLocal[mpiRank]):
+        pattern = patternStringList[iPatternsDeviatingLocal[i]]
+        diffFileContents[pattern] = set()
 
-            for match in set(referenceFileMatches).union(set(errorFileMatches)):
-                count = errorFileMatches[match] * len(referenceFiles) - referenceFileMatches[match]
-                if count > 0:
-                    diffFileContents[patternStringList[iPattern]].add(f"> {match} (x{count / len(referenceFiles):.3f})")
-                elif count < 0:
-                    diffFileContents[patternStringList[iPattern]].add(
-                        f"< {match} (x{-count / len(referenceFiles):.3f})"
-                    )
+        errorFileMatches = collections.Counter(listFileMatches(pattern, [errorFile]))
+        referenceFileMatches = collections.Counter(listFileMatches(pattern, referenceFiles))
 
+        for match in set(errorFileMatches).difference(set(referenceFileMatches)):
+            diffFileContents[pattern].add(f"> {match} (x{errorFileMatches[match]:.3f})")
+
+        for match in set(referenceFileMatches).difference(set(errorFileMatches)):
+            diffFileContents[pattern].add(f"< {match} (x{referenceFileMatches[match] / len(referenceFiles):.3f})")
+
+        for match in set(referenceFileMatches).union(set(errorFileMatches)):
+            count = errorFileMatches[match] * len(referenceFiles) - referenceFileMatches[match]
+            if count > 0:
+                diffFileContents[pattern].add(f"> {match} (x{count / len(referenceFiles):.3f})")
+            elif count < 0:
+                diffFileContents[pattern].add(f"< {match} (x{-count / len(referenceFiles):.3f})")
+
+    # TODO: See if it's possible to use gather
+    mpiComm.Barrier()
+    if mpiRank == Node.MASTER:
+        for iNode in range(1, mpiSize):
+            diffFileContents.update(mpiComm.recv(source=iNode, tag=MpiTag.DIFF_FILE_CONTENTS))
+    else:
+        mpiComm.send(diffFileContents, dest=Node.MASTER, tag=MpiTag.DIFF_FILE_CONTENTS)
+
+    # Write results to disk
+    if mpiRank == Node.MASTER:
+        outputFilename = f"{errorFile}.{outputFilenameSuffix}"
+        print(f"[{time.time() - timeStart:.3f}] Writing results to '{outputFilename}'...")
         # diffFileContentsSorted = dict(
         #    sorted(
         #        diffFileContents.items(),
@@ -271,9 +299,6 @@ def main(argv):
         # )
         diffFileContentsSorted = diffFileContents  # TODO
 
-        # Write results to disk
-        outputFilename = f"{errorFile}.{outputFilenameSuffix}"
-        print(f"[{time.time() - timeStart:.3f}] Writing results to '{outputFilename}'...")
         with open(outputFilename, "w") as diffFile:  # TODO: only write to the file once
             if iLinesUnmatched:
                 iLinesUnmatchedSorted = sorted(
