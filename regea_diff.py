@@ -23,6 +23,7 @@ mpiSize = mpiComm.Get_size()
 mpiRank = mpiComm.Get_rank()
 nWorkerNodes = mpiSize - 1
 mpiTypeMap = {
+    np.dtype("bool_"): MPI.BOOL,
     np.dtype("float_"): MPI.DOUBLE,
     np.dtype("int_"): MPI.LONG,
 }
@@ -150,7 +151,7 @@ def main(argv):
         print(f"[{time.time() - timeStart:.3f}] Calculating pattern match frequencies...")
     referenceFrequenciesLocal = [None] * nPatternsLocal[mpiRank]
     errorFrequenciesLocal = np.zeros(nPatternsLocal[mpiRank], dtype=np.int_)
-    iPatternsDeviatingLocal = np.zeros(nPatternsLocal[mpiRank], dtype=np.int_)
+    bPatternsDeviatingLocal = np.zeros(nPatternsLocal[mpiRank], dtype=np.bool_)
 
     for i in range(nPatternsLocal[mpiRank]):
         frequencies = countFileMatches(patternStringList[iPatternsLocal[i]], inputFiles)
@@ -164,7 +165,7 @@ def main(argv):
     frequencyStddevsLocal = referenceFrequenciesLocal.std(axis=1)
 
     for i in range(nPatternsLocal[mpiRank]):
-        iPatternsDeviatingLocal[i] = (
+        bPatternsDeviatingLocal[i] = (
             countStddevs(frequencyMeansLocal[i], frequencyStddevsLocal[i], errorFrequenciesLocal[i]) > threshold
         )
 
@@ -172,12 +173,12 @@ def main(argv):
         frequencyMeans = np.zeros(nPatterns, dtype=np.float_)
         frequencyStddevs = np.zeros(nPatterns, dtype=np.float_)
         errorFrequencies = np.zeros(nPatterns, dtype=np.float_)
-        iPatternsDeviating = np.zeros(nPatterns, dtype=np.int_)
+        bPatternsDeviating = np.zeros(nPatterns, dtype=np.bool_)
     else:
         frequencyMeans = None
         frequencyStddevs = None
         errorFrequencies = None
-        iPatternsDeviating = None
+        bPatternsDeviating = None
 
     mpiComm.Gatherv(
         frequencyMeansLocal,
@@ -195,29 +196,30 @@ def main(argv):
         root=Node.MASTER,
     )
     mpiComm.Gatherv(
-        iPatternsDeviatingLocal,
-        (iPatternsDeviating, nPatternsLocal, displacement, mpiTypeMap[iPatternsDeviatingLocal.dtype]),
+        bPatternsDeviatingLocal,
+        (bPatternsDeviating, nPatternsLocal, displacement, mpiTypeMap[bPatternsDeviatingLocal.dtype]),
         root=Node.MASTER,
     )
 
     # Check for unmatched lines
     if mpiRank == Node.MASTER:
         print(f"[{time.time() - timeStart:.3f}] Checking for unmatched lines...")
-        print(f"Portion of patterns deviating: {sum(iPatternsDeviating) / nPatterns}")
+        print(f"Portion of patterns deviating: {sum(bPatternsDeviating) / nPatterns}")
     return 0
-    linesMatched = np.zeros(len(errorFileContents), dtype=np.int_)  # Use int since MPI cannot reduce bool type
-    linesMatchedLocal = np.zeros(len(errorFileContents), dtype=np.int_)
+    bLinesMatched = np.zeros(len(errorFileContents), dtype=np.int_)  # Use int since MPI cannot reduce bool type
+    bLinesMatchedLocal = np.zeros(len(errorFileContents), dtype=np.int_)
     for i in range(nPatternsLocal[mpiRank]):
         for iLine in range(len(errorFileContents)):
             if patterns[patternStringList[iPatternsLocal[i]]].match(errorFileContents[iLine]) is not None:
-                linesMatchedLocal[iLine] = 1
+                bLinesMatchedLocal[iLine] = 1
 
     mpiComm.Allreduce(
-        linesMatchedLocal, (linesMatched, len(errorFileContents), mpiTypeMap[linesMatchedLocal.dtype]), op=MPI.MAX
+        bLinesMatchedLocal, (bLinesMatched, len(errorFileContents), mpiTypeMap[bLinesMatchedLocal.dtype]), op=MPI.MAX
     )
-    linesMatched = linesMatched.astype(np.bool_)
-    unmatchedLines = collections.Counter(
-        np.array(errorFileContents, dtype=object)[~linesMatched]
+    bLinesMatched = bLinesMatched.astype(np.bool_)
+    bLinesUnmatched = ~bLinesMatched
+    iLinesUnmatched = collections.Counter(
+        np.array(errorFileContents, dtype=object)[bLinesUnmatched]
     )  # TODO: only needed on master
 
     # Generate diff
@@ -226,7 +228,7 @@ def main(argv):
         diffFileContents = {}
 
         for iPattern in range(len(patternStringList)):
-            if not iPatternsDeviating[iPattern]:
+            if not bPatternsDeviating[iPattern]:
                 continue
 
             diffFileContents[patternStringList[iPattern]] = set()  # TODO: Make part of "write results to disk"
@@ -273,11 +275,13 @@ def main(argv):
         outputFilename = f"{errorFile}.{outputFilenameSuffix}"
         print(f"[{time.time() - timeStart:.3f}] Writing results to '{outputFilename}'...")
         with open(outputFilename, "w") as diffFile:  # TODO: only write to the file once
-            if unmatchedLines:
-                unmatchedLinesSorted = sorted(list(unmatchedLines), key=lambda item: unmatchedLines[item], reverse=True)
+            if iLinesUnmatched:
+                iLinesUnmatchedSorted = sorted(
+                    list(iLinesUnmatched), key=lambda item: iLinesUnmatched[item], reverse=True
+                )
                 diffFile.write("# Unmatched lines\n")
-                for line in unmatchedLinesSorted:
-                    diffFile.write(f"> {line} (x{unmatchedLines[line]})\n")
+                for line in iLinesUnmatchedSorted:
+                    diffFile.write(f"> {line} (x{iLinesUnmatched[line]})\n")
                 diffFile.write("\n\n")
             for patternString in diffFileContentsSorted:
                 if not diffFileContents[patternString]:
