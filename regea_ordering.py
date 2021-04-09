@@ -150,7 +150,7 @@ def listFileMatches(patternString, filenames):
     return matchList
 
 
-def main(argv):  # TODO: parallelize
+def main(argv):
     if mpiSize < mpiSizeMin:
         print(f"Error: Needs at least {mpiSizeMin} mpi nodes (current mpiSize: {mpiSize})")
         return 1
