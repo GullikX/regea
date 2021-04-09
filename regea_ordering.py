@@ -10,7 +10,7 @@ import time
 
 inputFilenamePatterns = "regea.output.patterns"
 outputFilenameSuffix = "ordering"
-iterationTimeLimit = 600  # seconds
+iterationTimeLimit = 6  # seconds
 nPatternsToShow = 100
 ruleValidityThreshold = 0.90
 
@@ -43,7 +43,7 @@ class MpiNode(enum.IntEnum):
 
 
 class MpiTag(enum.IntEnum):
-    ORDERING_RULE = 0
+    RULES = 0
 
 
 class Stream(enum.IntEnum):
@@ -253,10 +253,8 @@ def main(argv):  # TODO: parallelize
         #    len(np.where(referencePatternIndices[iFile] == Index.INVALID)[0]) == 0
         # ), f"Some lines in the reference file '{referenceFiles[iFile]}' were not matched by any pattern. Does the training result '{inputFilenamePatterns}' really correspond to the specified reference files?"
 
-    print(f"[{time.time() - timeStart:.3f}] ok")
-    return 0
-
-    print(f"[{time.time() - timeStart:.3f}] Generating ordering rules for {iterationTimeLimit} seconds...")
+    if mpiRank == MpiNode.MASTER:
+        print(f"[{time.time() - timeStart:.3f}] Generating ordering rules for {iterationTimeLimit} seconds...")
     rules = set()
     violatedRulesPerPattern = {}
     ruleValidities = {}
@@ -287,6 +285,17 @@ def main(argv):  # TODO: parallelize
                 if rule.patternOther not in violatedRulesPerPattern:
                     violatedRulesPerPattern[rule.patternOther] = set()
                 violatedRulesPerPattern[rule.patternOther].add(rule)
+
+    # TODO: See if it's possible to use gather
+    mpiComm.Barrier()
+    if mpiRank == MpiNode.MASTER:
+        for iNode in range(1, mpiSize):
+            rules.update(mpiComm.recv(source=iNode, tag=MpiTag.RULES))
+    else:
+        mpiComm.send(rules, dest=MpiNode.MASTER, tag=MpiTag.RULES)
+
+    print(f"[{time.time() - timeStart:.3f}] ok")
+    return 0
 
     errorFileContentsJoined = "\n".join(errorFileContents)
     outputFilename = f"{errorFile}.{outputFilenameSuffix}"
