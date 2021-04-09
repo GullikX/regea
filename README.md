@@ -30,7 +30,7 @@ The first step is letting Regea learn the usual structure of the log files by tr
 ```
 mpiexec python3 -m mpi4py ./regea.py referencefile1.log referencefile2.log ...
 ```
-This creates the files `regea.output.patterns` and `regea.output.frequencies` in the current working directory. These are used in the subsequent commands for checking for descrepancies in error files.
+This creates the file `regea.output.patterns` in the current working directory. This file is used in the subsequent commands for checking for descrepancies in error files.
 
 Check `man mpiexec` for help on how to use OpenMPI.
 
