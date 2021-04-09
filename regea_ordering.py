@@ -3,14 +3,13 @@ import enum
 from mpi4py import MPI
 import numpy as np
 import random
-import regex
 import subprocess
 import sys
 import time
 
 inputFilenamePatterns = "regea.output.patterns"
 outputFilenameSuffix = "ordering"
-iterationTimeLimit = 6  # seconds
+iterationTimeLimit = 600  # seconds
 nPatternsToShow = 100
 ruleValidityThreshold = 0.90
 
@@ -62,11 +61,11 @@ class RuleType(enum.IntEnum):
 
 
 class Rule:
-    def __init__(self, patterns):
-        self.iPattern = random.randint(0, len(patterns) - 1)
-        self.iPatternOther = random.randint(0, len(patterns) - 1)
-        self.pattern = patterns[self.iPattern]
-        self.patternOther = patterns[self.iPatternOther]
+    def __init__(self, patternStringList):
+        self.iPattern = random.randint(0, len(patternStringList) - 1)
+        self.iPatternOther = random.randint(0, len(patternStringList) - 1)
+        self.patternString = patternStringList[self.iPattern]
+        self.patternStringOther = patternStringList[self.iPatternOther]
         self.type = random.randint(0, len(RuleType) - 1)
 
     def evaluate(self, patternIndices):
@@ -105,7 +104,7 @@ class Rule:
         return True
 
     def __str__(self):
-        return f"Pattern '{self.pattern.pattern}' always matches {RuleType(self.type).name} pattern '{self.patternOther.pattern}'"
+        return f"Pattern '{self.patternString}' always matches {RuleType(self.type).name} pattern '{self.patternStringOther}'"
 
     def __hash__(self):
         return hash(str(self))
@@ -182,12 +181,6 @@ def main(argv):  # TODO: parallelize
     patternStringList = mpiComm.bcast(patternStringList, root=MpiNode.MASTER)
     nPatterns = len(patternStringList)
 
-    if mpiRank == MpiNode.MASTER:
-        print(f"[{time.time() - timeStart:.3f}] Compiling regex patterns...")
-    patterns = [None] * len(patternStringList)
-    for iPattern in range(len(patternStringList)):
-        patterns[iPattern] = regex.compile(patternStringList[iPattern], regex.MULTILINE)
-
     # Convert log entries to lists of pattern indices
     # TODO: What to do for lines which are matched by multiple patterns?
     if mpiRank == MpiNode.MASTER:
@@ -262,7 +255,7 @@ def main(argv):  # TODO: parallelize
     timeIterationStart = time.time()
 
     while time.time() - timeIterationStart < iterationTimeLimit:
-        rule = Rule(patterns)
+        rule = Rule(patternStringList)
         if rule in rules:
             continue
         ruleValidities[rule] = 1.0
@@ -279,12 +272,12 @@ def main(argv):  # TODO: parallelize
                 and not rule.evaluate(errorPatternIndices)
             ):
                 nRuleViolations += 1
-                if rule.pattern not in violatedRulesPerPattern:
-                    violatedRulesPerPattern[rule.pattern] = set()
-                violatedRulesPerPattern[rule.pattern].add(rule)
-                if rule.patternOther not in violatedRulesPerPattern:
-                    violatedRulesPerPattern[rule.patternOther] = set()
-                violatedRulesPerPattern[rule.patternOther].add(rule)
+                if rule.patternString not in violatedRulesPerPattern:
+                    violatedRulesPerPattern[rule.patternString] = set()
+                violatedRulesPerPattern[rule.patternString].add(rule)
+                if rule.patternStringOther not in violatedRulesPerPattern:
+                    violatedRulesPerPattern[rule.patternStringOther] = set()
+                violatedRulesPerPattern[rule.patternStringOther].add(rule)
 
     # TODO: See if it's possible to use gather
     mpiComm.Barrier()
@@ -300,21 +293,21 @@ def main(argv):  # TODO: parallelize
         print(f"[{time.time() - timeStart:.3f}] Writing results to '{outputFilename}'...")
         errorFileContentsJoined = "\n".join(errorFileContents)
         with open(outputFilename, "w") as orderingFile:  # TODO: only write to the file once
-            for pattern in list(
+            for patternString in list(
                 dict(sorted(violatedRulesPerPattern.items(), key=lambda item: len(item[1]), reverse=True))
             )[:nPatternsToShow]:
                 ruleValidityAverage = 0.0
-                for rule in violatedRulesPerPattern[pattern]:
-                    ruleValidityAverage += ruleValidities[rule] / len(violatedRulesPerPattern[pattern])
-                match = pattern.search(errorFileContentsJoined)
+                for rule in violatedRulesPerPattern[patternString]:
+                    ruleValidityAverage += ruleValidities[rule] / len(violatedRulesPerPattern[patternString])
+                match = listFileMatches(patternString, [errorFile])[0]
                 orderingFile.write(
-                    f"Violated rules containing '{match.string[match.span()[0] : match.span()[1]]}' (x{len(violatedRulesPerPattern[pattern])}, average validity {100*ruleValidityAverage:.1f}%):\n"
+                    f"Violated rules containing '{match}' (x{len(violatedRulesPerPattern[patternString])}, average validity {100*ruleValidityAverage:.1f}%):\n"
                 )
-                for rule in violatedRulesPerPattern[pattern]:
-                    match = rule.pattern.search(errorFileContentsJoined)
-                    matchOther = rule.patternOther.search(errorFileContentsJoined)
+                for rule in violatedRulesPerPattern[patternString]:
+                    match = listFileMatches(rule.patternString, [errorFile])[0]
+                    matchOther = listFileMatches(rule.patternStringOther, [errorFile])[0]
                     orderingFile.write(
-                        f"    Line '{match.string[match.span()[0] : match.span()[1]]}' should always come {RuleType(rule.type).name} '{matchOther.string[matchOther.span()[0] : matchOther.span()[1]]}' (validity {100*ruleValidities[rule]:.1f}%)\n"
+                        f"    Line '{match}' should always come {RuleType(rule.type).name} '{matchOther}' (validity {100*ruleValidities[rule]:.1f}%)\n"
                     )
                 orderingFile.write("\n")
             nMorePatternsToShow = len(violatedRulesPerPattern) - nPatternsToShow
