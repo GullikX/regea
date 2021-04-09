@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 *.diff
-regea.report.*
+*.ordering
+regea.output.patterns
 *.txt
 *.log
