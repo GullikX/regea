@@ -294,38 +294,37 @@ def main(argv):  # TODO: parallelize
     else:
         mpiComm.send(rules, dest=MpiNode.MASTER, tag=MpiTag.RULES)
 
-    print(f"[{time.time() - timeStart:.3f}] ok")
-    return 0
-
-    errorFileContentsJoined = "\n".join(errorFileContents)
-    outputFilename = f"{errorFile}.{outputFilenameSuffix}"
-    print(f"[{time.time() - timeStart:.3f}] Writing results to '{outputFilename}'...")
-    with open(outputFilename, "w") as orderingFile:  # TODO: only write to the file once
-        for pattern in list(dict(sorted(violatedRulesPerPattern.items(), key=lambda item: len(item[1]), reverse=True)))[
-            :nPatternsToShow
-        ]:
-            ruleValidityAverage = 0.0
-            for rule in violatedRulesPerPattern[pattern]:
-                ruleValidityAverage += ruleValidities[rule] / len(violatedRulesPerPattern[pattern])
-            match = pattern.search(errorFileContentsJoined)
-            orderingFile.write(
-                f"Violated rules containing '{match.string[match.span()[0] : match.span()[1]]}' (x{len(violatedRulesPerPattern[pattern])}, average validity {100*ruleValidityAverage:.1f}%):\n"
-            )
-            for rule in violatedRulesPerPattern[pattern]:
-                match = rule.pattern.search(errorFileContentsJoined)
-                matchOther = rule.patternOther.search(errorFileContentsJoined)
+    # Write results to disk
+    if mpiRank == MpiNode.MASTER:
+        outputFilename = f"{errorFile}.{outputFilenameSuffix}"
+        print(f"[{time.time() - timeStart:.3f}] Writing results to '{outputFilename}'...")
+        errorFileContentsJoined = "\n".join(errorFileContents)
+        with open(outputFilename, "w") as orderingFile:  # TODO: only write to the file once
+            for pattern in list(
+                dict(sorted(violatedRulesPerPattern.items(), key=lambda item: len(item[1]), reverse=True))
+            )[:nPatternsToShow]:
+                ruleValidityAverage = 0.0
+                for rule in violatedRulesPerPattern[pattern]:
+                    ruleValidityAverage += ruleValidities[rule] / len(violatedRulesPerPattern[pattern])
+                match = pattern.search(errorFileContentsJoined)
                 orderingFile.write(
-                    f"    Line '{match.string[match.span()[0] : match.span()[1]]}' should always come {RuleType(rule.type).name} '{matchOther.string[matchOther.span()[0] : matchOther.span()[1]]}' (validity {100*ruleValidities[rule]:.1f}%)\n"
+                    f"Violated rules containing '{match.string[match.span()[0] : match.span()[1]]}' (x{len(violatedRulesPerPattern[pattern])}, average validity {100*ruleValidityAverage:.1f}%):\n"
                 )
-            orderingFile.write("\n")
-        nMorePatternsToShow = len(violatedRulesPerPattern) - nPatternsToShow
-        if nMorePatternsToShow > 0:
-            orderingFile.write(f"(+{nMorePatternsToShow} more)\n\n")
-        orderingFile.write(
-            f"Summary: error log violates {nRuleViolations}/{len(rules)} randomly generated rules ({100*nRuleViolations/len(rules):.1f}%)\n"
-        )
+                for rule in violatedRulesPerPattern[pattern]:
+                    match = rule.pattern.search(errorFileContentsJoined)
+                    matchOther = rule.patternOther.search(errorFileContentsJoined)
+                    orderingFile.write(
+                        f"    Line '{match.string[match.span()[0] : match.span()[1]]}' should always come {RuleType(rule.type).name} '{matchOther.string[matchOther.span()[0] : matchOther.span()[1]]}' (validity {100*ruleValidities[rule]:.1f}%)\n"
+                    )
+                orderingFile.write("\n")
+            nMorePatternsToShow = len(violatedRulesPerPattern) - nPatternsToShow
+            if nMorePatternsToShow > 0:
+                orderingFile.write(f"(+{nMorePatternsToShow} more)\n\n")
+            orderingFile.write(
+                f"Summary: error log violates {nRuleViolations}/{len(rules)} randomly generated rules ({100*nRuleViolations/len(rules):.1f}%)\n"
+            )
 
-    print(f"[{time.time() - timeStart:.3f}] Done.")
+        print(f"[{time.time() - timeStart:.3f}] Done.")
 
 
 if __name__ == "__main__":
