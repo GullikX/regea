@@ -22,6 +22,10 @@ timeStart = time.time()
 
 
 # Enums
+class Index(enum.IntEnum):
+    INVALID = -1
+
+
 class Stream(enum.IntEnum):
     STDOUT = 0
     STDERR = 1
@@ -150,9 +154,9 @@ def main(argv):  # TODO: parallelize
 
     errorPatternIndices = np.zeros(len(errorFileContents), dtype=np.int_)
     for iLine in range(len(errorFileContents)):
-        errorPatternIndices[iLine] = errorPatternIndicesMap.get(errorFileContents[iLine], -1)
-    errorPatternIndices = errorPatternIndices[errorPatternIndices != -1]
-    assert len(np.where(errorPatternIndices == -1)[0]) == 0
+        errorPatternIndices[iLine] = errorPatternIndicesMap.get(errorFileContents[iLine], Index.INVALID)
+    errorPatternIndices = errorPatternIndices[errorPatternIndices != Index.INVALID]
+    assert len(np.where(errorPatternIndices == Index.INVALID)[0]) == 0
 
     referencePatternIndicesMap = {}
     for iPattern in range(len(patternStrings)):
@@ -165,10 +169,10 @@ def main(argv):  # TODO: parallelize
         referencePatternIndices[iFile] = np.zeros(len(referenceFileContents[iFile]), dtype=np.int_)
         for iLine in range(len(referenceFileContents[iFile])):
             referencePatternIndices[iFile][iLine] = referencePatternIndicesMap.get(
-                referenceFileContents[iFile][iLine], -1
+                referenceFileContents[iFile][iLine], Index.INVALID
             )
         # assert (
-        #    len(np.where(referencePatternIndices[iFile] == -1)[0]) == 0
+        #    len(np.where(referencePatternIndices[iFile] == Index.INVALID)[0]) == 0
         # ), f"Some lines in the reference file '{referenceFiles[iFile]}' were not matched by any pattern. Does the training result '{inputFilenamePatterns}' really correspond to the specified reference files?"
 
     print(f"[{time.time() - timeStart:.3f}] ok")
