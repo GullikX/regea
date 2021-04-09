@@ -37,14 +37,14 @@ Check `man mpiexec` for help on how to use OpenMPI.
 ### Checking for added/removed lines
 Check for log lines which have been added or removed for an error file `errorfile.log`:
 ```
-./regea_diff.py errorfile.log referencefile1.log referencefile2.log ...
+mpiexec python3 -m mpi4py ./regea_diff.py errorfile.log referencefile1.log referencefile2.log ...
 ```
 This creates a file `errorfile.log.diff` which describes the difference between the file `errorfile.log` and an average reference file.
 
 ### Checking for reordered lines
 Check for log lines which have been reordered for an error file `errorfile.log`:
 ```
-./regea_ordering.py errorfile.log referencefile1.log referencefile2.log ...
+mpiexec python3 -m mpi4py ./regea_ordering.py errorfile.log referencefile1.log referencefile2.log ...
 ```
 This creates a file `errorfile.log.ordering` which lists the detected differences in line ordering between the file `errorfile.log` and an average reference file.
 
