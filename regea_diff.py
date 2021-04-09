@@ -77,6 +77,8 @@ def listFileMatches(patternString, filenames):
 
 
 def countStddevs(mean, stddev, value):
+    if value == mean:
+        return 0.0
     if stddev == 0.0:
         return float("inf")
     else:
