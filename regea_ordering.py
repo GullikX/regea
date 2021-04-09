@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import enum
+from mpi4py import MPI
 import numpy as np
 import random
 import regex
@@ -17,6 +18,17 @@ grepCmd = ["rg", "--pcre2", "--no-multiline"]
 grepVersionCmd = grepCmd + ["--version"]
 grepListMatchesCmd = grepCmd + ["--no-filename", "--no-line-number", "--"]
 
+# OpenMPI parameters
+mpiSizeMin = 2  # Need at least two nodes for master-worker setup
+mpiComm = MPI.COMM_WORLD
+mpiSize = mpiComm.Get_size()
+mpiRank = mpiComm.Get_rank()
+nWorkerNodes = mpiSize - 1
+mpiTypeMap = {
+    np.dtype("float_"): MPI.DOUBLE,
+    np.dtype("int_"): MPI.LONG,
+}
+
 # Global variables
 timeStart = time.time()
 
@@ -24,6 +36,14 @@ timeStart = time.time()
 # Enums
 class Index(enum.IntEnum):
     INVALID = -1
+
+
+class MpiNode(enum.IntEnum):
+    MASTER = 0
+
+
+class MpiTag(enum.IntEnum):
+    ORDERING_RULE = 0
 
 
 class Stream(enum.IntEnum):
@@ -112,12 +132,29 @@ def listFileMatches(patternString, filenames):
 
 
 def main(argv):  # TODO: parallelize
+    if mpiSize < mpiSizeMin:
+        print(f"Error: Needs at least {mpiSizeMin} mpi nodes (current mpiSize: {mpiSize})")
+        return 1
+
     if len(sys.argv) < 3:
         print(f"usage: {sys.argv[0]} ERRORFILE REFERENCEFILE...")
         return 1
 
+    try:
+        subprocess.check_call(grepVersionCmd, stdout=subprocess.DEVNULL)
+    except FileNotFoundError:
+        print(f"Error: binary '{grepCmd[0]}' not found in $PATH, please install ripgrep")
+        return 1
+    except subprocess.CalledProcessError:
+        print(f"Error when running command '{' '.join(grepVersionCmd)}'")
+        return 1
+
+    for datatype in mpiTypeMap:
+        assert (
+            datatype.itemsize == mpiTypeMap[datatype].Get_size()
+        ), f"Datatype mpiSize mismatch: data type '{datatype.name}' has mpiSize {datatype.itemsize} while '{mpiTypeMap[datatype].name}' has mpiSize {mpiTypeMap[datatype].Get_size()}. Please adjust the mpiTypeMap parameter."
+
     # Load input files
-    print(f"[{time.time() - timeStart:.3f}] Loading error file...")
     errorFile = sys.argv[1]
     errorFileContents = [None]
     with open(errorFile, "r") as f:
@@ -125,7 +162,6 @@ def main(argv):  # TODO: parallelize
     errorFileContents = list(filter(None, errorFileContents))
 
     # Load input files
-    print(f"[{time.time() - timeStart:.3f}] Loading reference files...")
     referenceFiles = sys.argv[2:]
     referenceFileContents = [None] * len(referenceFiles)
     for iFile in range(len(referenceFiles)):
@@ -133,44 +169,86 @@ def main(argv):  # TODO: parallelize
             referenceFileContents[iFile] = f.read().splitlines()
         referenceFileContents[iFile] = list(filter(None, referenceFileContents[iFile]))
 
-    # Load training result
-    print(f"[{time.time() - timeStart:.3f}] Loading training result...")
-    patternStrings = []
-    with open(inputFilenamePatterns, "r") as inputFilePatterns:
-        patternStrings.extend(inputFilePatterns.read().splitlines())
+    inputFiles = [errorFile] + referenceFiles
 
-    print(f"[{time.time() - timeStart:.3f}] Compiling regex patterns...")
-    patterns = [None] * len(patternStrings)
-    for iPattern in range(len(patternStrings)):
-        patterns[iPattern] = regex.compile(patternStrings[iPattern], regex.MULTILINE)
+    # Load training result
+    if mpiRank == MpiNode.MASTER:
+        print(f"[{time.time() - timeStart:.3f}] Loading training result...")
+        patternStringList = []
+        with open(inputFilenamePatterns, "r") as inputFilePatterns:
+            patternStringList.extend(inputFilePatterns.read().splitlines())
+    else:
+        patternStringList = None
+    patternStringList = mpiComm.bcast(patternStringList, root=MpiNode.MASTER)
+    nPatterns = len(patternStringList)
+
+    if mpiRank == MpiNode.MASTER:
+        print(f"[{time.time() - timeStart:.3f}] Compiling regex patterns...")
+    patterns = [None] * len(patternStringList)
+    for iPattern in range(len(patternStringList)):
+        patterns[iPattern] = regex.compile(patternStringList[iPattern], regex.MULTILINE)
 
     # Convert log entries to lists of pattern indices
     # TODO: What to do for lines which are matched by multiple patterns?
-    print(f"[{time.time() - timeStart:.3f}] Checking file ordering...")
+    if mpiRank == MpiNode.MASTER:
+        print(f"[{time.time() - timeStart:.3f}] Performing initial ordering check...")
+        iPatterns = np.linspace(0, nPatterns - 1, nPatterns, dtype=np.int_)
+    else:
+        iPatterns = None
 
-    errorPatternIndicesMap = {}
-    for iPattern in range(len(patternStrings)):
-        errorPatternIndicesMap.update(dict.fromkeys(listFileMatches(patternStrings[iPattern], [errorFile]), iPattern))
+    nPatternsLocal = np.array([nPatterns // mpiSize] * mpiSize, dtype=np.int_)
+    nPatternsLocal[: (nPatterns % mpiSize)] += 1
+    iPatternsLocal = np.zeros(nPatternsLocal[mpiRank], dtype=np.int_)
 
-    errorPatternIndices = np.zeros(len(errorFileContents), dtype=np.int_)
-    for iLine in range(len(errorFileContents)):
-        errorPatternIndices[iLine] = errorPatternIndicesMap.get(errorFileContents[iLine], Index.INVALID)
-    errorPatternIndices = errorPatternIndices[errorPatternIndices != Index.INVALID]
-    assert len(np.where(errorPatternIndices == Index.INVALID)[0]) == 0
+    displacement = [0] * mpiSize
+    for iNode in range(1, mpiSize):
+        displacement[iNode] = displacement[iNode - 1] + nPatternsLocal[iNode - 1]
 
-    referencePatternIndicesMap = {}
-    for iPattern in range(len(patternStrings)):
-        referencePatternIndicesMap.update(
-            dict.fromkeys(listFileMatches(patternStrings[iPattern], referenceFiles), iPattern)
+    mpiComm.Scatterv(
+        (iPatterns, nPatternsLocal, displacement, mpiTypeMap[iPatternsLocal.dtype]), iPatternsLocal, root=MpiNode.MASTER
+    )
+    mpiComm.Barrier()
+
+    patternIndicesMap = {}
+    for i in range(nPatternsLocal[mpiRank]):
+        patternIndicesMap.update(
+            dict.fromkeys(listFileMatches(patternStringList[iPatternsLocal[i]], inputFiles), iPatternsLocal[i])
         )
 
+    errorPatternIndices = np.zeros(len(errorFileContents), dtype=np.int_)
+    errorPatternIndicesLocal = np.zeros(len(errorFileContents), dtype=np.int_)
+    for iLine in range(len(errorFileContents)):
+        errorPatternIndicesLocal[iLine] = patternIndicesMap.get(errorFileContents[iLine], Index.INVALID)
+    # errorPatternIndices = errorPatternIndices[errorPatternIndices != Index.INVALID]
+
     referencePatternIndices = [None] * len(referenceFiles)
+    referencePatternIndicesLocal = [None] * len(referenceFiles)
     for iFile in range(len(referenceFiles)):
         referencePatternIndices[iFile] = np.zeros(len(referenceFileContents[iFile]), dtype=np.int_)
+        referencePatternIndicesLocal[iFile] = np.zeros(len(referenceFileContents[iFile]), dtype=np.int_)
         for iLine in range(len(referenceFileContents[iFile])):
-            referencePatternIndices[iFile][iLine] = referencePatternIndicesMap.get(
+            referencePatternIndicesLocal[iFile][iLine] = patternIndicesMap.get(
                 referenceFileContents[iFile][iLine], Index.INVALID
             )
+
+    mpiComm.Allreduce(
+        errorPatternIndicesLocal,
+        (errorPatternIndices, len(errorFileContents), mpiTypeMap[errorPatternIndicesLocal.dtype]),
+        op=MPI.MAX,
+    )
+    errorPatternIndices = errorPatternIndices[errorPatternIndices != Index.INVALID]
+
+    for iFile in range(len(referenceFiles)):
+        mpiComm.Allreduce(
+            referencePatternIndicesLocal[iFile],
+            (
+                referencePatternIndices[iFile],
+                len(referenceFileContents[iFile]),
+                mpiTypeMap[referencePatternIndicesLocal[iFile].dtype],
+            ),
+            op=MPI.MAX,
+        )
+
         # assert (
         #    len(np.where(referencePatternIndices[iFile] == Index.INVALID)[0]) == 0
         # ), f"Some lines in the reference file '{referenceFiles[iFile]}' were not matched by any pattern. Does the training result '{inputFilenamePatterns}' really correspond to the specified reference files?"
