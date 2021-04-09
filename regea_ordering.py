@@ -148,10 +148,9 @@ def main(argv):  # TODO: parallelize
     for iPattern in range(len(patternStrings)):
         errorPatternIndicesMap.update(dict.fromkeys(listFileMatches(patternStrings[iPattern], [errorFile]), iPattern))
 
-    errorPatternIndices = np.array([-1] * len(errorFileContents), dtype=np.int_)
+    errorPatternIndices = np.zeros(len(errorFileContents), dtype=np.int_)
     for iLine in range(len(errorFileContents)):
-        if errorFileContents[iLine] in errorPatternIndicesMap:
-            errorPatternIndices[iLine] = errorPatternIndicesMap[errorFileContents[iLine]]
+        errorPatternIndices[iLine] = errorPatternIndicesMap.get(errorFileContents[iLine], -1)
     errorPatternIndices = errorPatternIndices[errorPatternIndices != -1]
     assert len(np.where(errorPatternIndices == -1)[0]) == 0
 
@@ -163,10 +162,11 @@ def main(argv):  # TODO: parallelize
 
     referencePatternIndices = [None] * len(referenceFiles)
     for iFile in range(len(referenceFiles)):
-        referencePatternIndices[iFile] = np.array([-1] * len(referenceFileContents[iFile]), dtype=np.int_)
+        referencePatternIndices[iFile] = np.zeros(len(referenceFileContents[iFile]), dtype=np.int_)
         for iLine in range(len(referenceFileContents[iFile])):
-            if referenceFileContents[iFile][iLine] in referencePatternIndicesMap:
-                referencePatternIndices[iFile][iLine] = referencePatternIndicesMap[referenceFileContents[iFile][iLine]]
+            referencePatternIndices[iFile][iLine] = referencePatternIndicesMap.get(
+                referenceFileContents[iFile][iLine], -1
+            )
         # assert (
         #    len(np.where(referencePatternIndices[iFile] == -1)[0]) == 0
         # ), f"Some lines in the reference file '{referenceFiles[iFile]}' were not matched by any pattern. Does the training result '{inputFilenamePatterns}' really correspond to the specified reference files?"
