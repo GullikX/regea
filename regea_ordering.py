@@ -262,9 +262,9 @@ def main(argv):
             op=MPI.MAX,
         )
 
-        # assert (
-        #    len(np.where(referencePatternIndices[iFile] == Index.INVALID)[0]) == 0
-        # ), f"Some lines in the reference file '{referenceFiles[iFile]}' were not matched by any pattern. Does the training result '{inputFilenamePatterns}' really correspond to the specified reference files?"
+        assert (
+            len(np.where(referencePatternIndices[iFile] == Index.INVALID)[0]) == 0
+        ), f"Some lines in the reference file '{referenceFiles[iFile]}' were not matched by any pattern. Does the training result '{inputFilenamePatterns}' really correspond to the specified reference files?"
 
     if mpiRank == MpiNode.MASTER:
         print(f"[{time.time() - timeStart:.3f}] Generating ordering rules for {iterationTimeLimit} seconds...")
