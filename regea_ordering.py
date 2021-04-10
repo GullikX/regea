@@ -324,7 +324,7 @@ def main(argv):
                     f"Violated rules containing '{match}' (x{len(violatedRulesPerPattern[patternString])}, average validity {100*ruleValidityAverage:.1f}%):\n"
                 )
                 for rule in violatedRulesPerPattern[patternString]:
-                    match = listFileMatches(rule.patternString, [errorFile])[0]
+                    match = listFileMatches(rule.patternString, [errorFile])[0]  # random IndexError ? TODO: check
                     matchOther = listFileMatches(rule.patternStringOther, [errorFile])[0]
                     orderingFile.write(
                         f"    Line '{match}' should always come {RuleType(rule.type).name} '{matchOther}' (validity {100*ruleValidities[rule]:.1f}%)\n"
