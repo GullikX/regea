@@ -29,7 +29,7 @@ import time
 
 inputFilenamePatterns = "regea.output.patterns"
 outputFilenameSuffix = "ordering"
-iterationTimeLimit = 60  # seconds
+iterationTimeLimit = 600  # seconds
 nPatternsToShow = 100
 ruleValidityThreshold = 0.90
 
