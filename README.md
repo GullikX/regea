@@ -34,6 +34,8 @@ This creates the file `regea.output.patterns` in the current working directory. 
 
 Check `man mpiexec` for help on how to use OpenMPI. When parallelizing computations across multiple computers, make sure that all computers can access the log files.
 
+**Please run `dos2unix` on all input files to make sure they are not corrupted!**
+
 ### Checking for added/removed lines
 Check for log lines which have been added or removed for an error file `errorfile.log`:
 ```
