@@ -232,7 +232,6 @@ def main(argv):
     errorPatternIndicesLocal = np.zeros(len(errorFileContents), dtype=np.int_)
     for iLine in range(len(errorFileContents)):
         errorPatternIndicesLocal[iLine] = patternIndicesMap.get(errorFileContents[iLine], Index.INVALID)
-    # errorPatternIndices = errorPatternIndices[errorPatternIndices != Index.INVALID]
 
     referencePatternIndices = [None] * len(referenceFiles)
     referencePatternIndicesLocal = [None] * len(referenceFiles)
