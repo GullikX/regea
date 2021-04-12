@@ -232,6 +232,10 @@ def main(argv):
     errorPatternIndicesLocal = np.zeros(len(errorFileContents), dtype=np.int_)
     for iLine in range(len(errorFileContents)):
         errorPatternIndicesLocal[iLine] = patternIndicesMap.get(errorFileContents[iLine], Index.INVALID)
+        if errorPatternIndicesLocal[iLine] != Index.INVALID:
+            assert (
+                len(listFileMatches(patternStringList[errorPatternIndicesLocal[iLine]], [errorFile])) > 0
+            ), f"Input file corruption detected! Try running 'dos2unix' on the input files and try again. (line {errorFile}:{iLine} '{errorFileContents[iLine]}' should be matched by pattern {errorPatternIndicesLocal[iLine]} '{patternStringList[errorPatternIndicesLocal[iLine]]}')"
 
     referencePatternIndices = [None] * len(referenceFiles)
     referencePatternIndicesLocal = [None] * len(referenceFiles)
