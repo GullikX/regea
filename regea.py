@@ -46,6 +46,7 @@ outputFilenameFrequencies = "regea.output.frequencies"
 grepCmd = ["rg", "--no-config", "--pcre2", "--no-multiline"]
 grepVersionCmd = grepCmd + ["--version"]
 grepCheckMatchCmd = grepCmd + ["--quiet", "--"]
+grepGetMatchingSubstringCmd = grepCmd + ["--only-matching", "--"]
 grepCountMatchesCmd = grepCmd + ["--count", "--no-filename", "--include-zero", "--"]
 
 # Evolution parameters TODO: update values
@@ -65,6 +66,7 @@ treeHeightMax = 17
 treeHeightMaxInit = 8
 printableAsciiMin = 32
 printableAsciiMax = 126
+padRange = 3
 
 # OpenMPI parameters
 mpiSizeMin = 2  # Need at least two nodes for master-worker setup
@@ -138,6 +140,38 @@ def countFileMatches(patternString, filenames):
 def countFilesWithMatches(patternString, filenames):
     nMatches = countFileMatches(patternString, filenames)
     return sum([bool(count) for count in nMatches])
+
+
+def padPatternString(patternString, inputString):
+    process = subprocess.Popen(
+        grepGetMatchingSubstringCmd + [patternString],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+    output = process.communicate(inputString.encode())
+    if not output[Stream.STDOUT]:
+        return None
+
+    matchingSubstring = output[Stream.STDOUT].decode().splitlines()[0]
+    if len(matchingSubstring) == 0:
+        return None
+
+    iSubstringStart = inputString.find(matchingSubstring)
+    assert iSubstringStart >= 0
+
+    iSubstringEnd = iSubstringStart + len(matchingSubstring)
+    padStartMin = max(iSubstringStart - padRange, 0)
+    padStartMax = iSubstringStart + padRange
+    padEndMin = max(len(inputString) - iSubstringEnd - padRange, 0)
+    padEndMax = len(inputString) - iSubstringEnd + padRange
+    patternStringPadded = f"^.{{{padStartMin},{padStartMax}}}{patternString}.{{{padEndMin},{padEndMax}}}$"
+
+    if not checkMatch(patternStringPadded, inputString):
+        return None  # TODO: check if we can salvage this situation
+
+    return patternStringPadded
 
 
 def escape(pattern):
@@ -423,12 +457,12 @@ def generatePatternString(targetString):
 
     def evaluateIndividual(individual):
         patternString = toolbox.compile(individual)
-
-        if not checkMatch(patternString, targetString):
+        patternStringPadded = padPatternString(patternString, targetString)
+        if patternStringPadded is None:
             return (0.0,)
 
         fitness = 0.0
-        fileMatches = countFileMatches(patternString, inputFiles)
+        fileMatches = countFileMatches(patternStringPadded, inputFiles)
         for iFile in range(len(inputFiles)):
             if fileMatches[iFile] > 0:
                 fitness += 1 / fileMatches[iFile] / len(inputFiles)
@@ -618,60 +652,13 @@ def generatePatternString(targetString):
 
     individualBest = copy.deepcopy(hallOfFame[0])
     patternStringBest = toolbox.compile(individualBest)
+    patternStringBestPadded = padPatternString(patternStringBest, targetString)
+    assert patternStringBestPadded is not None
+    assert checkMatch(patternStringBestPadded, targetString)
+    assert patternStringBestPadded.startswith("^")
+    assert patternStringBestPadded.endswith("$")
 
-    # print(
-    #    f"Generated pattern '{patternStringBest}', fileMatches: {countFileMatches(patternStringBest, inputFiles)}, nGenerations: {iGeneration}, fitness: {evaluateIndividual(individualBest)[0]}"
-    # )
-
-    nFilesWithMatches = countFilesWithMatches(patternStringBest, inputFiles)
-
-    # Pad beginning TODO: add some upper limit to the amount of padding
-    padMin = 0
-    while (
-        checkMatch(f".{{{padMin + 1}}}" + patternStringBest, targetString)
-        and countFilesWithMatches(f".{{{padMin + 1}}}" + patternStringBest, inputFiles) == nFilesWithMatches
-    ):
-        padMin += 1
-    padMax = padMin
-    while (
-        not checkMatch(f"^.{{{padMin},{padMax}}}" + patternStringBest, targetString)
-        or countFilesWithMatches(f"^.{{{padMin},{padMax}}}" + patternStringBest, inputFiles) < nFilesWithMatches
-    ):
-        padMax += 1
-    if padMax > 0:
-        if padMax > padMin:
-            patternStringBest = f".{{{padMin},{padMax}}}" + patternStringBest
-        else:
-            patternStringBest = f".{{{padMin}}}" + patternStringBest
-    patternStringBest = "^" + patternStringBest
-
-    # Pad end
-    padMin = 0
-    while (
-        checkMatch(patternStringBest + f".{{{padMin + 1}}}", targetString)
-        and countFilesWithMatches(patternStringBest + f".{{{padMin + 1}}}", inputFiles) == nFilesWithMatches
-    ):
-        padMin += 1
-    padMax = padMin
-    while (
-        not checkMatch(patternStringBest + f".{{{padMin},{padMax}}}$", targetString)
-        or countFilesWithMatches(patternStringBest + f".{{{padMin},{padMax}}}$", inputFiles) < nFilesWithMatches
-    ):
-        padMax += 1
-    if padMax > 0:
-        if padMax > padMin:
-            patternStringBest += f".{{{padMin},{padMax}}}"
-        else:
-            patternStringBest += f".{{{padMin}}}"
-    patternStringBest += "$"
-
-    assert checkMatch(patternStringBest, targetString)
-    assert evaluateIndividual(individualBest)
-    assert countFilesWithMatches(patternStringBest, inputFiles) == nFilesWithMatches
-    assert patternStringBest.startswith("^")
-    assert patternStringBest.endswith("$")
-
-    return patternStringBest
+    return patternStringBestPadded
 
 
 # Main
