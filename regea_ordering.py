@@ -33,7 +33,7 @@ iterationTimeLimit = 600  # seconds
 nPatternsToShow = 100
 ruleValidityThreshold = 0.90
 
-grepCmd = ["rg", "--pcre2", "--no-multiline"]
+grepCmd = ["rg", "--no-config", "--pcre2", "--no-multiline"]
 grepVersionCmd = grepCmd + ["--version"]
 grepListMatchesCmd = grepCmd + ["--no-filename", "--no-line-number", "--"]
 

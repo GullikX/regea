@@ -43,7 +43,7 @@ verbose = True
 outputFilenamePatterns = "regea.output.patterns"
 outputFilenameFrequencies = "regea.output.frequencies"
 
-grepCmd = ["rg", "--pcre2", "--no-multiline"]
+grepCmd = ["rg", "--no-config", "--pcre2", "--no-multiline"]
 grepVersionCmd = grepCmd + ["--version"]
 grepCheckMatchCmd = grepCmd + ["--quiet", "--"]
 grepCountMatchesCmd = grepCmd + ["--count", "--no-filename", "--include-zero", "--"]

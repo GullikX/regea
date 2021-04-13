@@ -32,7 +32,7 @@ inputFilenamePatterns = "regea.output.patterns"
 outputFilenameSuffix = "diff"
 threshold = 1.0  # Number of standard deviations
 
-grepCmd = ["rg", "--pcre2", "--no-multiline"]
+grepCmd = ["rg", "--no-config", "--pcre2", "--no-multiline"]
 grepVersionCmd = grepCmd + ["--version"]
 grepCountMatchesCmd = grepCmd + ["--count", "--with-filename", "--include-zero", "--"]
 grepListMatchesCmd = grepCmd + ["--no-filename", "--no-line-number", "--"]
