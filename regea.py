@@ -53,6 +53,7 @@ populationSize = 50
 evolutionTimeout = 60  # seconds
 tournamentSize = 3
 crossoverProbability = 0.17896349
+mutInitialProbability = 0.5
 mutUniformProbability = 0.00164105
 mutNodeReplacementProbability = 0.56501573
 mutEphemeralAllProbability = 0.11488764
@@ -495,7 +496,8 @@ def generatePatternString(targetString):
     toolbox.register("evaluate", evaluateIndividual)
 
     # Initialize population
-    population = toolbox.population(n=1)
+    population = toolbox.population(n=populationSize)
+
     population[0].fitness.values = toolbox.evaluate(population[0])
     assert population[0].fitness.values[0] > 0
     assert len(set([node.name for node in population[0] if isinstance(node, deap.gp.Primitive)])) <= 1
@@ -503,9 +505,36 @@ def generatePatternString(targetString):
     assert len(set([node.name for node in population[0] if isinstance(node, deap.gp.Terminal)])) == 1
     assert len(set([node.name for node in population[0]])) <= 2
 
-    population.extend([None] * (populationSize - 1))
+    # Replace some wildcards with full ranges
+    primitiveRange = [primitive for primitive in psetMutate.primitives[str] if primitive.name == Range.__name__][0]
+    ephemeralRandomPrintableAsciiCode = [
+        terminal for terminal in psetMutate.terminals[int] if terminal == deap.gp.RandomPrintableAsciiCode
+    ][0]
+
     for iIndividual in range(1, populationSize):
-        population[iIndividual] = copy.deepcopy(population[0])  # TODO: add randomness
+        iNode = 0
+        while True:
+            try:
+                nodeName = population[iIndividual][iNode].name
+            except IndexError:
+                break
+            if nodeName == Wildcard.__name__:
+                if random.random() < mutInitialProbability:
+                    asciiCodeMinNode = ephemeralRandomPrintableAsciiCode()
+                    asciiCodeMinNode.value = printableAsciiMin
+                    asciiCodeMinNode.name = str(asciiCodeMinNode.value)
+                    asciiCodeMaxNode = ephemeralRandomPrintableAsciiCode()
+                    asciiCodeMaxNode.value = printableAsciiMax
+                    asciiCodeMaxNode.name = str(asciiCodeMaxNode.value)
+                    rangeSubtree = deap.creator.Individual((primitiveRange, asciiCodeMinNode, asciiCodeMaxNode))
+                    subtree = population[iIndividual].searchSubtree(iNode)
+                    population[iIndividual][subtree] = rangeSubtree
+            iNode += 1
+
+    # Initial fitness evaluation
+    fitnesses = toolbox.map(toolbox.evaluate, population)
+    for individual, fitness in zip(population, fitnesses):
+        individual.fitness.values = fitness
 
     hallOfFame = deap.tools.HallOfFame(1)
     hallOfFame.update(population)
