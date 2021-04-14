@@ -54,6 +54,7 @@ populationSize = 50
 evolutionTimeout = 60  # seconds
 tournamentSize = 3
 crossoverProbability = 0.17896349
+crossoverLeafBias = 0.5
 mutInitialProbability = 0.5
 mutUniformProbability = 0.00164105
 mutNodeReplacementProbability = 0.56501573
@@ -500,7 +501,7 @@ def generatePatternString(targetString):
         toolbox.register("compile", deap.gp.compile, pset=psetMutate)
 
         toolbox.register("select", deap.tools.selTournament, tournsize=tournamentSize)
-        toolbox.register("mate", deap.gp.cxOnePoint)
+        toolbox.register("mate", deap.gp.cxOnePointLeafBiased, termpb=crossoverLeafBias)
         toolbox.register("expr_mutUniform", deap.gp.genHalfAndHalf, min_=0, max_=2)
         toolbox.register("mutUniform", deap.gp.mutUniform, expr=toolbox.expr_mutUniform, pset=psetMutate)
         toolbox.register("mutNodeReplacement", deap.gp.mutNodeReplacement, pset=psetMutate)
