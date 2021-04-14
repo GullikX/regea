@@ -771,7 +771,7 @@ def main(argv):
                 )
             else:
                 print(
-                    f"[{time.time() - timeStart:.3f}] Waiting for {nWorkerNodes - sum(iNodesFinished)} worker nodes to finish..."
+                    f"[{time.time() - timeStart:.3f}] Waiting for {nWorkerNodes - sum(iNodesFinished)} worker nodes to finish..."  # TODO: count correctly
                 )
             try:
                 targetString = fileContentsConcatenated[iLine]
