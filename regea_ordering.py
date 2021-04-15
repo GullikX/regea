@@ -19,6 +19,7 @@
 #
 #
 
+import argparse
 import enum
 from mpi4py import MPI
 import numpy as np
@@ -27,11 +28,13 @@ import subprocess
 import sys
 import time
 
-inputFilenamePatterns = "regea.output.patterns"
-outputFilenameSuffix = "ordering"
-iterationTimeLimit = 600  # seconds
-nPatternsToShow = 100
-ruleValidityThreshold = 0.90
+argsDefault = {
+    "patternFilename": "regea.output.patterns",
+    "outputFilenameSuffix": "ordering",
+    "iterationTimeLimit": 600.0,  # seconds
+    "nPatternsToShow": 100,
+    "ruleValidityThreshold": 0.90,
+}
 
 grepCmd = ["rg", "--no-config", "--pcre2", "--no-multiline"]
 grepVersionCmd = grepCmd + ["--version"]
@@ -150,13 +153,23 @@ def listFileMatches(patternString, filenames):
     return matchList
 
 
-def main(argv):
+def main():
+    argParser = argparse.ArgumentParser(
+        description="Regea - Regular expression evolutionary algorithm log file analyzer (diff generator)"
+    )
+    argParser.add_argument(f"--errorFile", type=str, metavar="ERRORFILE", required=True)  # TODO: allow multiple
+    for arg in argsDefault:
+        argParser.add_argument(
+            f"--{arg}",
+            default=argsDefault[arg],
+            type=type(argsDefault[arg]),
+            metavar=type(argsDefault[arg]).__name__.upper(),
+        )
+    argParser.add_argument("referenceFiles", nargs="+", metavar="REFERENCEFILE")
+    args = argParser.parse_args()
+
     if mpiSize < mpiSizeMin:
         print(f"Error: Needs at least {mpiSizeMin} mpi nodes (current mpiSize: {mpiSize})")
-        return 1
-
-    if len(sys.argv) < 3:
-        print(f"usage: {sys.argv[0]} ERRORFILE REFERENCEFILE...")
         return 1
 
     try:
@@ -174,27 +187,25 @@ def main(argv):
         ), f"Datatype mpiSize mismatch: data type '{datatype.name}' has mpiSize {datatype.itemsize} while '{mpiTypeMap[datatype].name}' has mpiSize {mpiTypeMap[datatype].Get_size()}. Please adjust the mpiTypeMap parameter."
 
     # Load input files
-    errorFile = sys.argv[1]
     errorFileContents = [None]
-    with open(errorFile, "r") as f:
+    with open(args.errorFile, "r") as f:
         errorFileContents = f.read().splitlines()
     errorFileContents = list(filter(None, errorFileContents))
 
     # Load input files
-    referenceFiles = sys.argv[2:]
-    referenceFileContents = [None] * len(referenceFiles)
-    for iFile in range(len(referenceFiles)):
-        with open(referenceFiles[iFile], "r") as f:
+    referenceFileContents = [None] * len(args.referenceFiles)
+    for iFile in range(len(args.referenceFiles)):
+        with open(args.referenceFiles[iFile], "r") as f:
             referenceFileContents[iFile] = f.read().splitlines()
         referenceFileContents[iFile] = list(filter(None, referenceFileContents[iFile]))
 
-    inputFiles = [errorFile] + referenceFiles
+    inputFiles = [args.errorFile] + args.referenceFiles
 
     # Load training result
     if mpiRank == MpiNode.MASTER:
         print(f"[{time.time() - timeStart:.3f}] Loading training result...")
         patternStringList = []
-        with open(inputFilenamePatterns, "r") as inputFilePatterns:
+        with open(args.patternFilename, "r") as inputFilePatterns:
             patternStringList.extend(inputFilePatterns.read().splitlines())
     else:
         patternStringList = None
@@ -234,12 +245,12 @@ def main(argv):
         errorPatternIndicesLocal[iLine] = patternIndicesMap.get(errorFileContents[iLine], Index.INVALID)
         if errorPatternIndicesLocal[iLine] != Index.INVALID:
             assert (
-                len(listFileMatches(patternStringList[errorPatternIndicesLocal[iLine]], [errorFile])) > 0
-            ), f"Input file corruption detected! Try running 'dos2unix' on the input files and try again. (line {errorFile}:{iLine} '{errorFileContents[iLine]}' should be matched by pattern {errorPatternIndicesLocal[iLine]} '{patternStringList[errorPatternIndicesLocal[iLine]]}')"
+                len(listFileMatches(patternStringList[errorPatternIndicesLocal[iLine]], [args.errorFile])) > 0
+            ), f"Input file corruption detected! Try running 'dos2unix' on the input files and try again. (line {args.errorFile}:{iLine} '{errorFileContents[iLine]}' should be matched by pattern {errorPatternIndicesLocal[iLine]} '{patternStringList[errorPatternIndicesLocal[iLine]]}')"
 
-    referencePatternIndices = [None] * len(referenceFiles)
-    referencePatternIndicesLocal = [None] * len(referenceFiles)
-    for iFile in range(len(referenceFiles)):
+    referencePatternIndices = [None] * len(args.referenceFiles)
+    referencePatternIndicesLocal = [None] * len(args.referenceFiles)
+    for iFile in range(len(args.referenceFiles)):
         referencePatternIndices[iFile] = np.zeros(len(referenceFileContents[iFile]), dtype=np.int_)
         referencePatternIndicesLocal[iFile] = np.zeros(len(referenceFileContents[iFile]), dtype=np.int_)
         for iLine in range(len(referenceFileContents[iFile])):
@@ -254,7 +265,7 @@ def main(argv):
     )
     errorPatternIndices = errorPatternIndices[errorPatternIndices != Index.INVALID]
 
-    for iFile in range(len(referenceFiles)):
+    for iFile in range(len(args.referenceFiles)):
         mpiComm.Allreduce(
             referencePatternIndicesLocal[iFile],
             (
@@ -267,25 +278,25 @@ def main(argv):
 
         assert (
             len(np.where(referencePatternIndices[iFile] == Index.INVALID)[0]) == 0
-        ), f"Some lines in the reference file '{referenceFiles[iFile]}' were not matched by any pattern. Does the training result '{inputFilenamePatterns}' really correspond to the specified reference files?"
+        ), f"Some lines in the reference file '{args.referenceFiles[iFile]}' were not matched by any pattern. Does the training result '{args.patternFilename}' really correspond to the specified reference files?"
 
     if mpiRank == MpiNode.MASTER:
-        print(f"[{time.time() - timeStart:.3f}] Generating ordering rules for {iterationTimeLimit} seconds...")
+        print(f"[{time.time() - timeStart:.3f}] Generating ordering rules for {args.iterationTimeLimit} seconds...")
     rules = set()
     violatedRulesPerPattern = {}
     ruleValidities = {}
     nRuleViolations = 0
     timeIterationStart = time.time()
 
-    while time.time() - timeIterationStart < iterationTimeLimit:
+    while time.time() - timeIterationStart < args.iterationTimeLimit:
         rule = Rule(patternStringList)
         if rule in rules:
             continue
         ruleValidities[rule] = 1.0
-        for iFile in range(len(referenceFiles)):
+        for iFile in range(len(args.referenceFiles)):
             if not rule.evaluate(referencePatternIndices[iFile]):
-                ruleValidities[rule] -= 1.0 / len(referenceFiles)
-                if ruleValidities[rule] < ruleValidityThreshold:
+                ruleValidities[rule] -= 1.0 / len(args.referenceFiles)
+                if ruleValidities[rule] < args.ruleValidityThreshold:
                     break
         else:
             rules.add(rule)
@@ -312,28 +323,28 @@ def main(argv):
 
     # Write results to disk
     if mpiRank == MpiNode.MASTER:
-        outputFilename = f"{errorFile}.{outputFilenameSuffix}"
+        outputFilename = f"{args.errorFile}.{args.outputFilenameSuffix}"
         print(f"[{time.time() - timeStart:.3f}] Writing results to '{outputFilename}'...")
         errorFileContentsJoined = "\n".join(errorFileContents)
         with open(outputFilename, "w") as orderingFile:  # TODO: only write to the file once
             for patternString in list(
                 dict(sorted(violatedRulesPerPattern.items(), key=lambda item: len(item[1]), reverse=True))
-            )[:nPatternsToShow]:
+            )[: args.nPatternsToShow]:
                 ruleValidityAverage = 0.0
                 for rule in violatedRulesPerPattern[patternString]:
                     ruleValidityAverage += ruleValidities[rule] / len(violatedRulesPerPattern[patternString])
-                match = listFileMatches(patternString, [errorFile])[0]
+                match = listFileMatches(patternString, [args.errorFile])[0]
                 orderingFile.write(
                     f"Violated rules containing '{match}' (x{len(violatedRulesPerPattern[patternString])}, average validity {100*ruleValidityAverage:.1f}%):\n"
                 )
                 for rule in violatedRulesPerPattern[patternString]:
-                    match = listFileMatches(rule.patternString, [errorFile])[0]
-                    matchOther = listFileMatches(rule.patternStringOther, [errorFile])[0]
+                    match = listFileMatches(rule.patternString, [args.errorFile])[0]
+                    matchOther = listFileMatches(rule.patternStringOther, [args.errorFile])[0]
                     orderingFile.write(
                         f"    Line '{match}' should always come {RuleType(rule.type).name} '{matchOther}' (validity {100*ruleValidities[rule]:.1f}%)\n"
                     )
                 orderingFile.write("\n")
-            nMorePatternsToShow = len(violatedRulesPerPattern) - nPatternsToShow
+            nMorePatternsToShow = len(violatedRulesPerPattern) - args.nPatternsToShow
             if nMorePatternsToShow > 0:
                 orderingFile.write(f"(+{nMorePatternsToShow} more)\n\n")
             orderingFile.write(
@@ -344,4 +355,4 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+    sys.exit(main())

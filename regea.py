@@ -19,6 +19,7 @@
 #
 #
 
+import argparse
 import copy
 import deap
 import deap.base
@@ -36,12 +37,24 @@ import subprocess
 import sys
 import time
 
-
-# General parameters
-verbose = True
-
-outputFilenamePatterns = "regea.output.patterns"
-outputFilenameFrequencies = "regea.output.frequencies"
+argsDefault = {
+    "outputFilename": "regea.output.patterns",
+    "populationSize": 50,
+    "evolutionTimeout": 60.0,  # seconds
+    "tournamentSize": 3,
+    "crossoverProbability": 0.17896349,
+    "crossoverLeafBias": 0.5,
+    "mutInitialProbability": 0.5,
+    "mutUniformProbability": 0.00164105,
+    "mutNodeReplacementProbability": 0.56501573,
+    "mutEphemeralAllProbability": 0.11488764,
+    "mutEphemeralOneProbability": 0.05598081,
+    "mutInsertProbability": 0.15532969,
+    "mutShrinkProbability": 0.45608542,
+    "treeHeightMax": 17,
+    "treeHeightMaxInit": 8,
+    "padRange": 3,
+}
 
 grepCmd = ["rg", "--no-config", "--pcre2", "--no-multiline"]
 grepVersionCmd = grepCmd + ["--version"]
@@ -49,27 +62,9 @@ grepCheckMatchCmd = grepCmd + ["--quiet", "--"]
 grepGetMatchingSubstringCmd = grepCmd + ["--only-matching", "--"]
 grepCountMatchesCmd = grepCmd + ["--count", "--no-filename", "--include-zero", "--"]
 
-# Evolution parameters TODO: update values
-populationSize = 50
-evolutionTimeout = 60  # seconds
-tournamentSize = 3
-crossoverProbability = 0.17896349
-crossoverLeafBias = 0.5
-mutInitialProbability = 0.5
-mutUniformProbability = 0.00164105
-mutNodeReplacementProbability = 0.56501573
-mutEphemeralAllProbability = 0.11488764
-mutEphemeralOneProbability = 0.05598081
-mutInsertProbability = 0.15532969
-mutShrinkProbability = 0.45608542
-
-treeHeightMax = 17
-treeHeightMaxInit = 8
 printableAsciiMin = 32
 printableAsciiMax = 126
-padRange = 3
 
-# OpenMPI parameters
 mpiSizeMin = 2  # Need at least two nodes for master-worker setup
 mpiComm = MPI.COMM_WORLD
 mpiSize = mpiComm.Get_size()
@@ -81,7 +76,6 @@ mpiTypeMap = {
 }
 
 # Global variables
-inputFiles = []
 psetInit = None
 psetMutate = None
 toolbox = None
@@ -143,7 +137,7 @@ def countFilesWithMatches(patternString, filenames):
     return sum([bool(count) for count in nMatches])
 
 
-def padPatternString(patternString, inputString):
+def padPatternString(patternString, inputString, padRange=0):
     process = subprocess.Popen(
         grepGetMatchingSubstringCmd + [patternString],
         stdin=subprocess.PIPE,
@@ -417,7 +411,7 @@ class NonWhitespace:
 
 
 # Genetic programming algorithm
-def generatePatternString(targetString):
+def generatePatternString(targetString, args):
     global psetInit
     global psetMutate
     global toolbox
@@ -463,10 +457,10 @@ def generatePatternString(targetString):
             return (0.0,)
 
         fitness = 0.0
-        fileMatches = countFileMatches(patternStringPadded, inputFiles)
-        for iFile in range(len(inputFiles)):
+        fileMatches = countFileMatches(patternStringPadded, args.inputFiles)
+        for iFile in range(len(args.inputFiles)):
             if fileMatches[iFile] > 0:
-                fitness += 1 / fileMatches[iFile] / len(inputFiles)
+                fitness += 1 / fileMatches[iFile] / len(args.inputFiles)
 
         return (fitness,)
 
@@ -500,8 +494,8 @@ def generatePatternString(targetString):
         toolbox = deap.base.Toolbox()
         toolbox.register("compile", deap.gp.compile, pset=psetMutate)
 
-        toolbox.register("select", deap.tools.selTournament, tournsize=tournamentSize)
-        toolbox.register("mate", deap.gp.cxOnePointLeafBiased, termpb=crossoverLeafBias)
+        toolbox.register("select", deap.tools.selTournament, tournsize=args.tournamentSize)
+        toolbox.register("mate", deap.gp.cxOnePointLeafBiased, termpb=args.crossoverLeafBias)
         toolbox.register("expr_mutUniform", deap.gp.genHalfAndHalf, min_=0, max_=2)
         toolbox.register("mutUniform", deap.gp.mutUniform, expr=toolbox.expr_mutUniform, pset=psetMutate)
         toolbox.register("mutNodeReplacement", deap.gp.mutNodeReplacement, pset=psetMutate)
@@ -510,28 +504,34 @@ def generatePatternString(targetString):
         toolbox.register("mutInsert", deap.gp.mutInsert, pset=psetMutate)
         toolbox.register("mutShrink", deap.gp.mutShrink)
 
-        toolbox.decorate("mate", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=treeHeightMax))
-        toolbox.decorate("mutUniform", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=treeHeightMax))
+        toolbox.decorate("mate", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=args.treeHeightMax))
         toolbox.decorate(
-            "mutNodeReplacement", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=treeHeightMax)
+            "mutUniform", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=args.treeHeightMax)
         )
         toolbox.decorate(
-            "mutEphemeralAll", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=treeHeightMax)
+            "mutNodeReplacement", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=args.treeHeightMax)
         )
         toolbox.decorate(
-            "mutEphemeralOne", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=treeHeightMax)
+            "mutEphemeralAll", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=args.treeHeightMax)
         )
-        toolbox.decorate("mutInsert", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=treeHeightMax))
-        toolbox.decorate("mutShrink", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=treeHeightMax))
+        toolbox.decorate(
+            "mutEphemeralOne", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=args.treeHeightMax)
+        )
+        toolbox.decorate(
+            "mutInsert", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=args.treeHeightMax)
+        )
+        toolbox.decorate(
+            "mutShrink", deap.gp.staticLimit(key=operator.attrgetter("height"), max_value=args.treeHeightMax)
+        )
 
-    treeHeightInit = min(int(np.log(len(targetString)) / np.log(Concatenate.arity)), treeHeightMaxInit)
+    treeHeightInit = min(int(np.log(len(targetString)) / np.log(Concatenate.arity)), args.treeHeightMaxInit)
     toolbox.register("expr", deap.gp.genHalfAndHalf, pset=psetInit, min_=treeHeightInit, max_=treeHeightInit)
     toolbox.register("individual", deap.tools.initIterate, deap.creator.Individual, toolbox.expr)
     toolbox.register("population", deap.tools.initRepeat, list, toolbox.individual)
     toolbox.register("evaluate", evaluateIndividual)
 
     # Initialize population
-    population = toolbox.population(n=populationSize)
+    population = toolbox.population(n=args.populationSize)
 
     population[0].fitness.values = toolbox.evaluate(population[0])
     assert population[0].fitness.values[0] > 0
@@ -546,7 +546,7 @@ def generatePatternString(targetString):
         terminal for terminal in psetMutate.terminals[int] if terminal == deap.gp.RandomPrintableAsciiCode
     ][0]
 
-    for iIndividual in range(1, populationSize):
+    for iIndividual in range(1, len(population)):
         iNode = 0
         while True:
             try:
@@ -554,7 +554,7 @@ def generatePatternString(targetString):
             except IndexError:
                 break
             if nodeName == Wildcard.__name__:
-                if random.random() < mutInitialProbability:
+                if random.random() < args.mutInitialProbability:
                     asciiCodeMinNode = ephemeralRandomPrintableAsciiCode()
                     asciiCodeMinNode.value = printableAsciiMin
                     asciiCodeMinNode.name = str(asciiCodeMinNode.value)
@@ -587,14 +587,14 @@ def generatePatternString(targetString):
 
     # record = stats.compile(population) if stats else {}
     # logbook.record(gen=0, nevals=len(invalid_ind), **record)
-    # if verbose:
+    # if args.verbose:
     #    print(logbook.stream)
 
     # Begin the generational process
     evolutionTimeStart = time.time()
     # iGeneration = 1
 
-    while time.time() - evolutionTimeStart < evolutionTimeout:
+    while time.time() - evolutionTimeStart < args.evolutionTimeout:
         # Select the next generation individuals
         offspring = toolbox.select(population, len(population))
 
@@ -602,27 +602,27 @@ def generatePatternString(targetString):
         offspringTemp = [toolbox.clone(ind) for ind in offspring]
 
         for i in range(1, len(offspringTemp), 2):
-            if random.random() < crossoverProbability:
+            if random.random() < args.crossoverProbability:
                 offspringTemp[i - 1], offspringTemp[i] = toolbox.mate(offspringTemp[i - 1], offspringTemp[i])
                 del offspringTemp[i - 1].fitness.values, offspringTemp[i].fitness.values
 
         for i in range(len(offspringTemp)):
-            if random.random() < mutUniformProbability:
+            if random.random() < args.mutUniformProbability:
                 (offspringTemp[i],) = toolbox.mutUniform(offspringTemp[i])
                 del offspringTemp[i].fitness.values
-            if random.random() < mutNodeReplacementProbability:
+            if random.random() < args.mutNodeReplacementProbability:
                 (offspringTemp[i],) = toolbox.mutNodeReplacement(offspringTemp[i])
                 del offspringTemp[i].fitness.values
-            if random.random() < mutEphemeralAllProbability:
+            if random.random() < args.mutEphemeralAllProbability:
                 (offspringTemp[i],) = toolbox.mutEphemeralAll(offspringTemp[i])
                 del offspringTemp[i].fitness.values
-            if random.random() < mutEphemeralOneProbability:
+            if random.random() < args.mutEphemeralOneProbability:
                 (offspringTemp[i],) = toolbox.mutEphemeralOne(offspringTemp[i])
                 del offspringTemp[i].fitness.values
-            if random.random() < mutInsertProbability:
+            if random.random() < args.mutInsertProbability:
                 (offspringTemp[i],) = toolbox.mutInsert(offspringTemp[i])
                 del offspringTemp[i].fitness.values
-            if random.random() < mutShrinkProbability:
+            if random.random() < args.mutShrinkProbability:
                 (offspringTemp[i],) = toolbox.mutShrink(offspringTemp[i])
                 del offspringTemp[i].fitness.values
 
@@ -646,14 +646,14 @@ def generatePatternString(targetString):
         # Append the current generation statistics to the logbook
         # record = stats.compile(population) if stats else {}
         # logbook.record(gen=iGeneration, nevals=len(invalid_ind), **record)
-        # if verbose:
+        # if args.verbose:
         #    print(logbook.stream)
 
         # iGeneration += 1
 
     individualBest = copy.deepcopy(hallOfFame[0])
     patternStringBest = toolbox.compile(individualBest)
-    patternStringBestPadded = padPatternString(patternStringBest, targetString)
+    patternStringBestPadded = padPatternString(patternStringBest, targetString, padRange=args.padRange)
     assert patternStringBestPadded is not None
     assert checkMatch(patternStringBestPadded, targetString)
     assert patternStringBestPadded.startswith("^")
@@ -663,13 +663,23 @@ def generatePatternString(targetString):
 
 
 # Main
-def main(argv):
+def main():
+    argParser = argparse.ArgumentParser(
+        description="Regea - Regular expression evolutionary algorithm log file analyzer"
+    )
+    for arg in argsDefault:
+        argParser.add_argument(
+            f"--{arg}",
+            default=argsDefault[arg],
+            type=type(argsDefault[arg]),
+            metavar=type(argsDefault[arg]).__name__.upper(),
+        )
+    argParser.add_argument("--verbose", action="store_true")
+    argParser.add_argument("inputFiles", nargs="+", metavar="FILE")
+    args = argParser.parse_args()
+
     if mpiSize < mpiSizeMin:
         print(f"Error: Needs at least {mpiSizeMin} mpi nodes (current mpiSize: {mpiSize})")
-        return 1
-
-    if len(argv) < 2:
-        print(f"usage: {argv[0]} FILE1...")
         return 1
 
     try:
@@ -686,8 +696,7 @@ def main(argv):
             datatype.itemsize == mpiTypeMap[datatype].Get_size()
         ), f"Datatype mpiSize mismatch: data type '{datatype.name}' has mpiSize {datatype.itemsize} while '{mpiTypeMap[datatype].name}' has mpiSize {mpiTypeMap[datatype].Get_size()}. Please adjust the mpiTypeMap parameter."
 
-    inputFiles.extend(argv[1:])
-    nInputFiles = len(inputFiles)
+    nInputFiles = len(args.inputFiles)
 
     # Load input files
     if mpiRank == MpiNode.MASTER:
@@ -697,7 +706,7 @@ def main(argv):
         patterns = {}
 
         for iFile in range(nInputFiles):
-            with open(inputFiles[iFile], "r") as f:
+            with open(args.inputFiles[iFile], "r") as f:
                 fileContents[iFile] = f.read().splitlines()
             fileContents[iFile] = list(filter(None, fileContents[iFile]))
             random.shuffle(fileContents[iFile])
@@ -729,7 +738,7 @@ def main(argv):
 
         # Sanity check
         for patternString in patterns:
-            nMatches = countFilesWithMatches(patternString, inputFiles)
+            nMatches = countFilesWithMatches(patternString, args.inputFiles)
             assert (
                 nMatches == nInputFiles
             ), f"Input file corruption detected! Try running 'dos2unix' on the input files and try again. (regex pattern '{patternString}' should match all input files)"
@@ -757,7 +766,8 @@ def main(argv):
                     if match is not None:
                         break
                 else:
-                    print(f"[{time.time() - timeStart:.3f}] Generating pattern to match string: '{targetString}'")
+                    if args.verbose:
+                        print(f"[{time.time() - timeStart:.3f}] Generating pattern to match string: '{targetString}'")
                     mpiComm.send(iLine, dest=iNode, tag=MpiTag.LINE_INDEX)
                     iLine += 1
                     break
@@ -793,7 +803,7 @@ def main(argv):
                     if sum(iNodesFinished) == nWorkerNodes:
                         break
                 else:
-                    if verbose:
+                    if args.verbose:
                         print(f"[{time.time() - timeStart:.3f}] Generated pattern: '{patternString}'")
                         if targetString is not None:
                             print(
@@ -811,17 +821,17 @@ def main(argv):
                 mpiComm.send(None, dest=MpiNode.MASTER, tag=MpiTag.REGEX_PATTERN)
                 break
             else:
-                patternString = generatePatternString(targetString)
+                patternString = generatePatternString(targetString, args)
                 mpiComm.send(patternString, dest=MpiNode.MASTER, tag=MpiTag.REGEX_PATTERN)
 
     # Write results to disk
     if mpiRank == MpiNode.MASTER:
-        print(f"[{time.time() - timeStart:.3f}] Writing results to disk...")
-        with open(outputFilenamePatterns, "w") as outputFilePatterns:
-            outputFilePatterns.write("\n".join(patterns) + "\n")
+        print(f"[{time.time() - timeStart:.3f}] Writing {len(patterns)} regex patterns to '{args.outputFilename}'...")
+        with open(args.outputFilename, "w") as outputFile:
+            outputFile.write("\n".join(patterns) + "\n")
 
         print(f"[{time.time() - timeStart:.3f}] Done.")
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+    sys.exit(main())

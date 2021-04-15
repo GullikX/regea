@@ -19,6 +19,7 @@
 #
 #
 
+import argparse
 import collections
 import enum
 from mpi4py import MPI
@@ -28,9 +29,11 @@ import subprocess
 import sys
 import time
 
-inputFilenamePatterns = "regea.output.patterns"
-outputFilenameSuffix = "diff"
-threshold = 1.0  # Number of standard deviations
+argsDefault = {
+    "patternFilename": "regea.output.patterns",
+    "outputFilenameSuffix": "diff",
+    "threshold": 1.0,  # Number of standard deviations
+}
 
 grepCmd = ["rg", "--no-config", "--pcre2", "--no-multiline"]
 grepVersionCmd = grepCmd + ["--version"]
@@ -105,29 +108,37 @@ def countStddevs(mean, stddev, value):
         return abs(value - mean) / stddev
 
 
-def main(argv):
+def main():
+    argParser = argparse.ArgumentParser(
+        description="Regea - Regular expression evolutionary algorithm log file analyzer (diff generator)"
+    )
+    argParser.add_argument(f"--errorFile", type=str, metavar="ERRORFILE", required=True)  # TODO: allow multiple
+    for arg in argsDefault:
+        argParser.add_argument(
+            f"--{arg}",
+            default=argsDefault[arg],
+            type=type(argsDefault[arg]),
+            metavar=type(argsDefault[arg]).__name__.upper(),
+        )
+    argParser.add_argument("referenceFiles", nargs="+", metavar="REFERENCEFILE")
+    args = argParser.parse_args()
+
     if mpiSize < mpiSizeMin:
         print(f"Error: Needs at least {mpiSizeMin} mpi nodes (current mpiSize: {mpiSize})")
         return 1
 
-    if len(sys.argv) < 3:
-        print(f"usage: {sys.argv[0]} ERRORFILE REFERENCEFILE...")
-        return 1
-
-    errorFile = sys.argv[1]
     errorFileContents = [None]
-    with open(errorFile, "r") as f:
+    with open(args.errorFile, "r") as f:
         errorFileContents = f.read().splitlines()
     errorFileContents = list(filter(None, errorFileContents))
 
-    referenceFiles = sys.argv[2:]
-    referenceFileContents = [None] * len(referenceFiles)
-    for iFile in range(len(referenceFiles)):
-        with open(referenceFiles[iFile], "r") as f:
+    referenceFileContents = [None] * len(args.referenceFiles)
+    for iFile in range(len(args.referenceFiles)):
+        with open(args.referenceFiles[iFile], "r") as f:
             referenceFileContents[iFile] = f.read().splitlines()
         referenceFileContents[iFile] = list(filter(None, referenceFileContents[iFile]))
 
-    inputFiles = [errorFile] + referenceFiles
+    inputFiles = [args.errorFile] + args.referenceFiles
 
     try:
         subprocess.check_call(grepVersionCmd, stdout=subprocess.DEVNULL)
@@ -147,7 +158,7 @@ def main(argv):
     if mpiRank == MpiNode.MASTER:
         print(f"[{time.time() - timeStart:.3f}] Loading training result...")
         patternStringList = []
-        with open(inputFilenamePatterns, "r") as inputFilePatterns:
+        with open(args.patternFilename, "r") as inputFilePatterns:
             patternStringList.extend(inputFilePatterns.read().splitlines())
     else:
         patternStringList = None
@@ -186,8 +197,8 @@ def main(argv):
 
     for i in range(nPatternsLocal[mpiRank]):
         frequencies = countFileMatches(patternStringList[iPatternsLocal[i]], inputFiles)
-        errorFrequenciesLocal[i] = frequencies[errorFile]
-        del frequencies[errorFile]
+        errorFrequenciesLocal[i] = frequencies[args.errorFile]
+        del frequencies[args.errorFile]
         referenceFrequenciesLocal[i] = list(frequencies.values())
 
     referenceFrequenciesLocal = np.array(referenceFrequenciesLocal, dtype=np.float_)
@@ -197,7 +208,7 @@ def main(argv):
 
     for i in range(nPatternsLocal[mpiRank]):
         bPatternsDeviatingLocal[i] = (
-            countStddevs(frequencyMeansLocal[i], frequencyStddevsLocal[i], errorFrequenciesLocal[i]) > threshold
+            countStddevs(frequencyMeansLocal[i], frequencyStddevsLocal[i], errorFrequenciesLocal[i]) > args.threshold
         )
 
     if mpiRank == MpiNode.MASTER:
@@ -282,21 +293,21 @@ def main(argv):
         pattern = patternStringList[iPatternsDeviatingLocal[i]]
         diffFileContents[pattern] = set()
 
-        errorFileMatches = collections.Counter(listFileMatches(pattern, [errorFile]))
-        referenceFileMatches = collections.Counter(listFileMatches(pattern, referenceFiles))
+        errorFileMatches = collections.Counter(listFileMatches(pattern, [args.errorFile]))
+        referenceFileMatches = collections.Counter(listFileMatches(pattern, args.referenceFiles))
 
         for match in set(errorFileMatches).difference(set(referenceFileMatches)):
             diffFileContents[pattern].add(f"> {match} (x{errorFileMatches[match]:.3f})")
 
         for match in set(referenceFileMatches).difference(set(errorFileMatches)):
-            diffFileContents[pattern].add(f"< {match} (x{referenceFileMatches[match] / len(referenceFiles):.3f})")
+            diffFileContents[pattern].add(f"< {match} (x{referenceFileMatches[match] / len(args.referenceFiles):.3f})")
 
         for match in set(referenceFileMatches).union(set(errorFileMatches)):
-            count = errorFileMatches[match] * len(referenceFiles) - referenceFileMatches[match]
+            count = errorFileMatches[match] * len(args.referenceFiles) - referenceFileMatches[match]
             if count > 0:
-                diffFileContents[pattern].add(f"> {match} (x{count / len(referenceFiles):.3f})")
+                diffFileContents[pattern].add(f"> {match} (x{count / len(args.referenceFiles):.3f})")
             elif count < 0:
-                diffFileContents[pattern].add(f"< {match} (x{-count / len(referenceFiles):.3f})")
+                diffFileContents[pattern].add(f"< {match} (x{-count / len(args.referenceFiles):.3f})")
 
     # TODO: See if it's possible to use gather
     mpiComm.Barrier()
@@ -308,7 +319,7 @@ def main(argv):
 
     # Write results to disk
     if mpiRank == MpiNode.MASTER:
-        outputFilename = f"{errorFile}.{outputFilenameSuffix}"
+        outputFilename = f"{args.errorFile}.{args.outputFilenameSuffix}"
         print(f"[{time.time() - timeStart:.3f}] Writing results to '{outputFilename}'...")
 
         frequencyMeansMap = {}
@@ -351,4 +362,4 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+    sys.exit(main())
