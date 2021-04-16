@@ -53,4 +53,4 @@ This creates a file `errorfile.log.ordering` which lists the detected difference
 
 ## Configuration
 
-Each python file has parameters defined at the top of the file. (TODO: better configuration)
+Parameters for each python file can be listed using the `--help` option.
