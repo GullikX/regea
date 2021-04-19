@@ -66,6 +66,8 @@ class MpiNode(enum.IntEnum):
 
 class MpiTag(enum.IntEnum):
     RULES = 0
+    RULES_PER_PATTERN = 1
+    RULE_VALIDITIES = 2
 
 
 class Stream(enum.IntEnum):
@@ -285,7 +287,6 @@ def main():
     rules = set()
     violatedRulesPerPattern = {}
     ruleValidities = {}
-    nRuleViolations = 0
     timeIterationStart = time.time()
 
     while time.time() - timeIterationStart < args.iterationTimeLimit:
@@ -297,6 +298,7 @@ def main():
             if not rule.evaluate(referencePatternIndices[iFile]):
                 ruleValidities[rule] -= 1.0 / len(args.referenceFiles)
                 if ruleValidities[rule] < args.ruleValidityThreshold:
+                    del ruleValidities[rule]
                     break
         else:
             rules.add(rule)
@@ -305,7 +307,6 @@ def main():
                 and rule.iPatternOther in errorPatternIndices
                 and not rule.evaluate(errorPatternIndices)
             ):
-                nRuleViolations += 1
                 if rule.patternString not in violatedRulesPerPattern:
                     violatedRulesPerPattern[rule.patternString] = set()
                 violatedRulesPerPattern[rule.patternString].add(rule)
@@ -316,16 +317,26 @@ def main():
     # TODO: See if it's possible to use gather
     mpiComm.Barrier()
     if mpiRank == MpiNode.MASTER:
+        print(f"[{time.time() - timeStart:.3f}] Gathering results...")
         for iNode in range(1, mpiSize):
             rules.update(mpiComm.recv(source=iNode, tag=MpiTag.RULES))
+            violatedRulesPerPattern.update(mpiComm.recv(source=iNode, tag=MpiTag.RULES_PER_PATTERN))
+            ruleValidities.update(mpiComm.recv(source=iNode, tag=MpiTag.RULE_VALIDITIES))
     else:
         mpiComm.send(rules, dest=MpiNode.MASTER, tag=MpiTag.RULES)
+        mpiComm.send(violatedRulesPerPattern, dest=MpiNode.MASTER, tag=MpiTag.RULES_PER_PATTERN)
+        mpiComm.send(ruleValidities, dest=MpiNode.MASTER, tag=MpiTag.RULE_VALIDITIES)
+
+    rulesViolated = set()
+    for patternString in patternStringList:
+        if patternString in violatedRulesPerPattern:
+            rulesViolated.update(violatedRulesPerPattern[patternString])
+    nRuleViolations = len(rulesViolated)
 
     # Write results to disk
     if mpiRank == MpiNode.MASTER:
         outputFilename = f"{args.errorFile}.{args.outputFilenameSuffix}"
         print(f"[{time.time() - timeStart:.3f}] Writing results to '{outputFilename}'...")
-        errorFileContentsJoined = "\n".join(errorFileContents)
         with open(outputFilename, "w") as orderingFile:  # TODO: only write to the file once
             for patternString in list(
                 dict(sorted(violatedRulesPerPattern.items(), key=lambda item: len(item[1]), reverse=True))
