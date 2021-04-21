@@ -22,6 +22,8 @@
 import argparse
 import enum
 from mpi4py import MPI
+from matplotlib.backends.backend_pdf import PdfPages
+import matplotlib.pyplot as plt
 import numpy as np
 import random
 import subprocess
@@ -30,7 +32,7 @@ import time
 
 argsDefault = {
     "patternFilename": "regea.output.patterns",
-    "outputFilenameSuffix": "ordering",
+    "outputFilenameSuffix": "ordering.pdf",
     "iterationTimeLimit": 600.0,  # seconds
     "nPatternsToShow": 100,
     "ruleValidityThreshold": 0.90,
@@ -39,6 +41,17 @@ argsDefault = {
 grepCmd = ["rg", "--no-config", "--pcre2", "--no-multiline"]
 grepVersionCmd = grepCmd + ["--version"]
 grepListMatchesCmd = grepCmd + ["--no-filename", "--no-line-number", "--"]
+
+plt.rcParams.update({"font.family": "monospace"})
+
+a4size = (8.27, 11.69)  # inches
+fontSize = 8
+rowHeight = 0.019
+
+#colorGreen = "#4CAF50"
+#colorRed = "#F44336"
+colorAmber = "#FFC107"
+alphaMax = 0.8
 
 # OpenMPI parameters
 mpiSizeMin = 2  # Need at least two nodes for master-worker setup
@@ -335,32 +348,49 @@ def main():
 
     # Write results to disk
     if mpiRank == MpiNode.MASTER:
+        heatmap = dict.fromkeys(errorFileContents, 0.0)
         outputFilename = f"{args.errorFile}.{args.outputFilenameSuffix}"
         print(f"[{time.time() - timeStart:.3f}] Writing results to '{outputFilename}'...")
-        with open(outputFilename, "w") as orderingFile:  # TODO: only write to the file once
-            for patternString in list(
-                dict(sorted(violatedRulesPerPattern.items(), key=lambda item: len(item[1]), reverse=True))
-            )[: args.nPatternsToShow]:
-                ruleValidityAverage = 0.0
-                for rule in violatedRulesPerPattern[patternString]:
-                    ruleValidityAverage += ruleValidities[rule] / len(violatedRulesPerPattern[patternString])
-                match = listFileMatches(patternString, [args.errorFile])[0]
-                orderingFile.write(
-                    f"Violated rules containing '{match}' (x{len(violatedRulesPerPattern[patternString])}, average validity {100*ruleValidityAverage:.1f}%):\n"
+        for patternString in list(
+            dict(sorted(violatedRulesPerPattern.items(), key=lambda item: len(item[1]), reverse=True))
+        ):
+            ruleValidityAverage = 0.0
+            for rule in violatedRulesPerPattern[patternString]:
+                ruleValidityAverage += ruleValidities[rule] / len(violatedRulesPerPattern[patternString])
+            matches = listFileMatches(patternString, [args.errorFile])
+            for match in matches:
+                heatmap[match] += ruleValidityAverage
+        heatmapMax = max(heatmap.values())
+        heatmapCleanup = heatmap['V Ascom Phone (VoIP): Audio cleanup']
+        print(f"{heatmapMax} {heatmapCleanup} {heatmapCleanup/heatmapMax}")
+
+        with PdfPages(outputFilename) as pdf:
+            iPage = 0
+            pdfPage = plt.figure(figsize=a4size)
+            pdfPage.clf()
+            for iLine in range(len(errorFileContents)):
+                if iLine * rowHeight - iPage > 1.0:
+                    try:
+                        pdf.savefig()
+                    except:
+                        pass
+                    plt.close()
+                    pdfPage = plt.figure(figsize=a4size)
+                    pdfPage.clf()
+                    iPage += 1
+                text = pdfPage.text(
+                    0.01,
+                    1 - ((iLine + 1) * rowHeight - iPage),
+                    errorFileContents[iLine],
+                    transform=pdfPage.transFigure,
+                    size=fontSize,
+                    ha="left",
                 )
-                for rule in violatedRulesPerPattern[patternString]:
-                    match = listFileMatches(rule.patternString, [args.errorFile])[0]
-                    matchOther = listFileMatches(rule.patternStringOther, [args.errorFile])[0]
-                    orderingFile.write(
-                        f"    Line '{match}' should always come {RuleType(rule.type).name} '{matchOther}' (validity {100*ruleValidities[rule]:.1f}%)\n"
-                    )
-                orderingFile.write("\n")
-            nMorePatternsToShow = len(violatedRulesPerPattern) - args.nPatternsToShow
-            if nMorePatternsToShow > 0:
-                orderingFile.write(f"(+{nMorePatternsToShow} more)\n\n")
-            orderingFile.write(
-                f"Summary: error log violates {nRuleViolations}/{len(rules)} randomly generated rules ({100*nRuleViolations/len(rules):.1f}%)\n"
-            )
+                alpha = alphaMax * heatmap[errorFileContents[iLine]] / heatmapMax
+                text.set_bbox(dict(facecolor=colorAmber, alpha=alpha, linewidth=0.0))
+            pdf.savefig()
+            plt.close()
+
 
         print(f"[{time.time() - timeStart:.3f}] Done.")
 
