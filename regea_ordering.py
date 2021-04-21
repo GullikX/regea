@@ -110,9 +110,17 @@ class Rule:
     def evaluate(self, patternIndices):
         if self.iPattern == self.iPatternOther:
             return False
-        iPatternMatches = np.where(patternIndices == self.iPattern)[0]
-        iPatternOtherMatches = np.where(patternIndices == self.iPatternOther)[0]
-        if not len(iPatternMatches) or not len(iPatternOtherMatches):
+
+        iPatternMatches = set()
+        iPatternOtherMatches = set()
+
+        for iLine in range(len(patternIndices)):
+            if self.iPattern in patternIndices[iLine]:
+                iPatternMatches.add(iLine)
+            if self.iPatternOther in patternIndices[iLine]:
+                iPatternOtherMatches.add(iLine)
+
+        if len(iPatternMatches) == 0 or len(iPatternOtherMatches) == 0:
             return False
 
         if self.type == RuleType.BEFORE_ALL:
@@ -128,12 +136,14 @@ class Rule:
             if not max(iPatternMatches) > max(iPatternOtherMatches):
                 return False
         elif self.type == RuleType.DIRECTLY_BEFORE:
+            return False  # TODO
             if len(iPatternOtherMatches) < len(iPatternMatches):
                 return False
             for iPatternMatch in iPatternMatches:
                 if not len(np.where(iPatternOtherMatches - iPatternMatch == 1)[0]):
                     return False
         elif self.type == RuleType.DIRECTLY_AFTER:
+            return False  # TODO
             for iPatternMatch in iPatternMatches:
                 if not len(np.where(iPatternOtherMatches - iPatternMatch == -1)[0]):
                     return False
@@ -229,7 +239,6 @@ def main():
     nPatterns = len(patternStringList)
 
     # Convert log entries to lists of pattern indices
-    # TODO: What to do for lines which are matched by multiple patterns?
     if mpiRank == MpiNode.MASTER:
         print(f"[{time.time() - timeStart:.3f}] Performing initial ordering check...")
         iPatterns = np.linspace(0, nPatterns - 1, nPatterns, dtype=np.int_)
@@ -280,10 +289,9 @@ def main():
                         referencePatternIndices[iFile][iLine].add(iPattern)
     else:
         errorPatternIndices = None
+        referencePatternIndices = None
     errorPatternIndices = mpiComm.bcast(errorPatternIndices, root=MpiNode.MASTER)
-
-    print("ok")
-    return 0
+    referencePatternIndices = mpiComm.bcast(referencePatternIndices, root=MpiNode.MASTER)
 
     if mpiRank == MpiNode.MASTER:
         print(f"[{time.time() - timeStart:.3f}] Generating ordering rules for {args.iterationTimeLimit} seconds...")
@@ -305,11 +313,7 @@ def main():
                     break
         else:
             rules.add(rule)
-            if (
-                rule.iPattern in errorPatternIndices
-                and rule.iPatternOther in errorPatternIndices
-                and not rule.evaluate(errorPatternIndices)
-            ):
+            if not rule.evaluate(errorPatternIndices):
                 if rule.patternString not in violatedRulesPerPattern:
                     violatedRulesPerPattern[rule.patternString] = set()
                 violatedRulesPerPattern[rule.patternString].add(rule)
@@ -321,10 +325,12 @@ def main():
     mpiComm.Barrier()
     if mpiRank == MpiNode.MASTER:
         print(f"[{time.time() - timeStart:.3f}] Gathering results...")
+        print(f"[{time.time() - timeStart:.3f}] [0] {len(rules)}")
         for iNode in range(1, mpiSize):
             rules.update(mpiComm.recv(source=iNode, tag=MpiTag.RULES))
             violatedRulesPerPattern.update(mpiComm.recv(source=iNode, tag=MpiTag.RULES_PER_PATTERN))
             ruleValidities.update(mpiComm.recv(source=iNode, tag=MpiTag.RULE_VALIDITIES))
+            print(f"[{time.time() - timeStart:.3f}] [{iNode}] {len(rules)}")
     else:
         mpiComm.send(rules, dest=MpiNode.MASTER, tag=MpiTag.RULES)
         mpiComm.send(violatedRulesPerPattern, dest=MpiNode.MASTER, tag=MpiTag.RULES_PER_PATTERN)
@@ -338,6 +344,8 @@ def main():
 
     # Write results to disk
     if mpiRank == MpiNode.MASTER:
+        print(f"nRules = {len(rules)}")
+        print(f"nRuleViolations = {nRuleViolations}")
         heatmap = dict.fromkeys(errorFileContents, 0.0)
         outputFilename = f"{args.errorFile}.{args.outputFilenameSuffix}"
         print(f"[{time.time() - timeStart:.3f}] Writing results to '{outputFilename}'...")
@@ -347,7 +355,7 @@ def main():
             ruleValidityAverage = 0.0
             for rule in violatedRulesPerPattern[patternString]:
                 ruleValidityAverage += ruleValidities[rule] / len(violatedRulesPerPattern[patternString])
-            matches = listFileMatches(patternString, [args.errorFile])
+            matches = set(listFileMatches(patternString, [args.errorFile]))
             for match in matches:
                 heatmap[match] += ruleValidityAverage
         heatmapMax = max(heatmap.values())
