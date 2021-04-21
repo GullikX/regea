@@ -38,7 +38,7 @@ argsDefault = {
     "ruleValidityThreshold": 0.90,
 }
 
-grepCmd = ["rg", "--no-config", "--pcre2", "--no-multiline"]
+grepCmd = ["rg", "--no-config", "--no-multiline"]
 grepVersionCmd = grepCmd + ["--version"]
 grepListMatchesCmd = grepCmd + ["--no-filename", "--no-line-number", "--"]
 
@@ -48,8 +48,8 @@ a4size = (8.27, 11.69)  # inches
 fontSize = 8
 rowHeight = 0.019
 
-#colorGreen = "#4CAF50"
-#colorRed = "#F44336"
+# colorGreen = "#4CAF50"
+# colorRed = "#F44336"
 colorAmber = "#FFC107"
 alphaMax = 0.8
 
@@ -81,6 +81,7 @@ class MpiTag(enum.IntEnum):
     RULES = 0
     RULES_PER_PATTERN = 1
     RULE_VALIDITIES = 2
+    MATCHED_LINES_PER_PATTERN = 3
 
 
 class Stream(enum.IntEnum):
@@ -248,52 +249,41 @@ def main():
     )
     mpiComm.Barrier()
 
-    patternIndicesMap = {}
+    matchedLinesPerPattern = {}
     for i in range(nPatternsLocal[mpiRank]):
-        patternIndicesMap.update(
-            dict.fromkeys(listFileMatches(patternStringList[iPatternsLocal[i]], inputFiles), iPatternsLocal[i])
-        )
+        patternString = patternStringList[iPatternsLocal[i]]
+        matchedLinesPerPattern[patternString] = set(listFileMatches(patternString, inputFiles))
 
-    errorPatternIndices = np.zeros(len(errorFileContents), dtype=np.int_)
-    errorPatternIndicesLocal = np.zeros(len(errorFileContents), dtype=np.int_)
-    for iLine in range(len(errorFileContents)):
-        errorPatternIndicesLocal[iLine] = patternIndicesMap.get(errorFileContents[iLine], Index.INVALID)
-        if errorPatternIndicesLocal[iLine] != Index.INVALID:
-            assert (
-                len(listFileMatches(patternStringList[errorPatternIndicesLocal[iLine]], [args.errorFile])) > 0
-            ), f"Input file corruption detected! Try running 'dos2unix' on the input files and try again. (line {args.errorFile}:{iLine} '{errorFileContents[iLine]}' should be matched by pattern {errorPatternIndicesLocal[iLine]} '{patternStringList[errorPatternIndicesLocal[iLine]]}')"
+    mpiComm.Barrier()
+    if mpiRank == MpiNode.MASTER:
+        for iNode in range(1, mpiSize):
+            matchedLinesPerPattern.update(mpiComm.recv(source=iNode, tag=MpiTag.MATCHED_LINES_PER_PATTERN))
+    else:
+        mpiComm.send(matchedLinesPerPattern, dest=MpiNode.MASTER, tag=MpiTag.MATCHED_LINES_PER_PATTERN)
+    matchedLinesPerPattern = mpiComm.bcast(matchedLinesPerPattern, root=MpiNode.MASTER)
 
-    referencePatternIndices = [None] * len(args.referenceFiles)
-    referencePatternIndicesLocal = [None] * len(args.referenceFiles)
-    for iFile in range(len(args.referenceFiles)):
-        referencePatternIndices[iFile] = np.zeros(len(referenceFileContents[iFile]), dtype=np.int_)
-        referencePatternIndicesLocal[iFile] = np.zeros(len(referenceFileContents[iFile]), dtype=np.int_)
-        for iLine in range(len(referenceFileContents[iFile])):
-            referencePatternIndicesLocal[iFile][iLine] = patternIndicesMap.get(
-                referenceFileContents[iFile][iLine], Index.INVALID
-            )
+    if mpiRank == MpiNode.MASTER:  # TODO: fix time complexity + parallelize
+        errorPatternIndices = [None] * len(errorFileContents)
+        for iLine in range(len(errorFileContents)):
+            errorPatternIndices[iLine] = set()
+            for iPattern in range(len(patternStringList)):
+                if errorFileContents[iLine] in matchedLinesPerPattern[patternStringList[iPattern]]:
+                    errorPatternIndices[iLine].add(iPattern)
 
-    mpiComm.Allreduce(
-        errorPatternIndicesLocal,
-        (errorPatternIndices, len(errorFileContents), mpiTypeMap[errorPatternIndicesLocal.dtype]),
-        op=MPI.MAX,
-    )
-    errorPatternIndices = errorPatternIndices[errorPatternIndices != Index.INVALID]
+        referencePatternIndices = [None] * len(args.referenceFiles)
+        for iFile in range(len(args.referenceFiles)):
+            referencePatternIndices[iFile] = [None] * len(referenceFileContents[iFile])
+            for iLine in range(len(referenceFileContents[iFile])):
+                referencePatternIndices[iFile][iLine] = set()
+                for iPattern in range(len(patternStringList)):
+                    if referenceFileContents[iFile][iLine] in matchedLinesPerPattern[patternStringList[iPattern]]:
+                        referencePatternIndices[iFile][iLine].add(iPattern)
+    else:
+        errorPatternIndices = None
+    errorPatternIndices = mpiComm.bcast(errorPatternIndices, root=MpiNode.MASTER)
 
-    for iFile in range(len(args.referenceFiles)):
-        mpiComm.Allreduce(
-            referencePatternIndicesLocal[iFile],
-            (
-                referencePatternIndices[iFile],
-                len(referenceFileContents[iFile]),
-                mpiTypeMap[referencePatternIndicesLocal[iFile].dtype],
-            ),
-            op=MPI.MAX,
-        )
-
-        assert (
-            len(np.where(referencePatternIndices[iFile] == Index.INVALID)[0]) == 0
-        ), f"Some lines in the reference file '{args.referenceFiles[iFile]}' were not matched by any pattern. Does the training result '{args.patternFilename}' really correspond to the specified reference files?"
+    print("ok")
+    return 0
 
     if mpiRank == MpiNode.MASTER:
         print(f"[{time.time() - timeStart:.3f}] Generating ordering rules for {args.iterationTimeLimit} seconds...")
@@ -361,8 +351,6 @@ def main():
             for match in matches:
                 heatmap[match] += ruleValidityAverage
         heatmapMax = max(heatmap.values())
-        heatmapCleanup = heatmap['V Ascom Phone (VoIP): Audio cleanup']
-        print(f"{heatmapMax} {heatmapCleanup} {heatmapCleanup/heatmapMax}")
 
         with PdfPages(outputFilename) as pdf:
             iPage = 0
@@ -390,7 +378,6 @@ def main():
                 text.set_bbox(dict(facecolor=colorAmber, alpha=alpha, linewidth=0.0))
             pdf.savefig()
             plt.close()
-
 
         print(f"[{time.time() - timeStart:.3f}] Done.")
 
