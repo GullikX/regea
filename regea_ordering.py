@@ -107,7 +107,7 @@ class Rule:
         self.patternStringOther = patternStringList[self.iPatternOther]
         self.type = random.randint(0, len(RuleType) - 1)
 
-    def evaluate(self, patternIndices):
+    def evaluate(self, patternIndices, iLineTarget=None):
         if self.iPattern == self.iPatternOther:
             return False
 
@@ -119,6 +119,10 @@ class Rule:
                 iPatternMatches.add(iLine)
             if self.iPatternOther in patternIndices[iLine]:
                 iPatternOtherMatches.add(iLine)
+
+        if iLineTarget is not None:
+            assert iLineTarget in iPatternMatches, f"Rule '{self}' is invalid for line {iLine}"
+            iPatternMatches = set([iLineTarget])
 
         if len(iPatternMatches) == 0 or len(iPatternOtherMatches) == 0:
             return False
@@ -335,30 +339,32 @@ def main():
         mpiComm.send(rules, dest=MpiNode.MASTER, tag=MpiTag.RULES)
         mpiComm.send(violatedRulesPerPattern, dest=MpiNode.MASTER, tag=MpiTag.RULES_PER_PATTERN)
         mpiComm.send(ruleValidities, dest=MpiNode.MASTER, tag=MpiTag.RULE_VALIDITIES)
-
-    rulesViolated = set()
-    for patternString in patternStringList:
-        if patternString in violatedRulesPerPattern:
-            rulesViolated.update(violatedRulesPerPattern[patternString])
-    nRuleViolations = len(rulesViolated)
+    rules = mpiComm.bcast(rules, root=MpiNode.MASTER)
+    ruleValidities = mpiComm.bcast(ruleValidities, root=MpiNode.MASTER)
 
     # Write results to disk
     if mpiRank == MpiNode.MASTER:
-        print(f"nRules = {len(rules)}")
-        print(f"nRuleViolations = {nRuleViolations}")
-        heatmap = dict.fromkeys(errorFileContents, 0.0)
+        print(f"[{time.time() - timeStart:.3f}] Checking for violated rules...")
+        heatmap = np.zeros(len(errorFileContents), dtype=np.float_)
+        for iLine in range(len(errorFileContents)):  # TODO: parallelize (mpi reduce)
+            print(f"iLine = {iLine}/{len(errorFileContents)} ({int(100 * iLine / len(errorFileContents))}%)")
+            for rule in [rule for rule in rules if rule.iPattern in errorPatternIndices[iLine]]:
+                if not rule.evaluate(errorPatternIndices, iLine):
+                    heatmap[iLine] += ruleValidities[rule]
+        heatmapMax = max(heatmap)
+
         outputFilename = f"{args.errorFile}.{args.outputFilenameSuffix}"
         print(f"[{time.time() - timeStart:.3f}] Writing results to '{outputFilename}'...")
-        for patternString in list(
-            dict(sorted(violatedRulesPerPattern.items(), key=lambda item: len(item[1]), reverse=True))
-        ):
-            ruleValidityAverage = 0.0
-            for rule in violatedRulesPerPattern[patternString]:
-                ruleValidityAverage += ruleValidities[rule] / len(violatedRulesPerPattern[patternString])
-            matches = set(listFileMatches(patternString, [args.errorFile]))
-            for match in matches:
-                heatmap[match] += ruleValidityAverage
-        heatmapMax = max(heatmap.values())
+
+        #for patternString in list(
+        #    dict(sorted(violatedRulesPerPattern.items(), key=lambda item: len(item[1]), reverse=True))
+        #):
+        #    ruleValidityAverage = 0.0
+        #    for rule in violatedRulesPerPattern[patternString]:
+        #        ruleValidityAverage += ruleValidities[rule] / len(violatedRulesPerPattern[patternString])
+        #    matches = set(listFileMatches(patternString, [args.errorFile]))
+        #    for match in matches:
+        #        heatmap[match] += ruleValidityAverage
 
         with PdfPages(outputFilename) as pdf:
             iPage = 0
@@ -382,7 +388,7 @@ def main():
                     size=fontSize,
                     ha="left",
                 )
-                alpha = alphaMax * heatmap[errorFileContents[iLine]] / heatmapMax
+                alpha = alphaMax * heatmap[iLine] / heatmapMax
                 text.set_bbox(dict(facecolor=colorAmber, alpha=alpha, linewidth=0.0))
             pdf.savefig()
             plt.close()
