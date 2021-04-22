@@ -23,6 +23,8 @@ import argparse
 import collections
 import enum
 from mpi4py import MPI
+from matplotlib.backends.backend_pdf import PdfPages
+import matplotlib.pyplot as plt
 import numpy as np
 import regex as re
 import subprocess
@@ -31,9 +33,20 @@ import time
 
 argsDefault = {
     "patternFilename": "regea.output.patterns",
-    "outputFilenameSuffix": "diff",
+    "outputFilenameSuffix": "diff.pdf",
     "threshold": 1.0,  # Number of standard deviations
 }
+
+plt.rcParams.update({"font.family": "monospace"})
+
+a4size = (8.27, 11.69)  # inches
+fontSize = 8
+rowHeight = 0.019
+
+colorGreen = "#4CAF50"
+# colorRed = "#F44336"
+# colorAmber = "#FFC107"
+alphaMax = 0.8
 
 grepCmd = ["rg", "--no-config", "--pcre2", "--no-multiline"]
 grepVersionCmd = grepCmd + ["--version"]
@@ -59,6 +72,7 @@ timeStart = time.time()
 # Enums
 class MpiTag(enum.IntEnum):
     DIFF_FILE_CONTENTS = 0
+    MATCHED_LINES_PER_PATTERN = 1
 
 
 class MpiNode(enum.IntEnum):
@@ -131,12 +145,15 @@ def main():
     with open(args.errorFile, "r") as f:
         errorFileContents = f.read().splitlines()
     errorFileContents = list(filter(None, errorFileContents))
+    errorFileContentsCounter = collections.Counter(errorFileContents)
 
     referenceFileContents = [None] * len(args.referenceFiles)
+    referenceFileContentsCounter = [None] * len(args.referenceFiles)
     for iFile in range(len(args.referenceFiles)):
         with open(args.referenceFiles[iFile], "r") as f:
             referenceFileContents[iFile] = f.read().splitlines()
         referenceFileContents[iFile] = list(filter(None, referenceFileContents[iFile]))
+        referenceFileContentsCounter[iFile] = collections.Counter(referenceFileContents[iFile])
 
     inputFiles = [args.errorFile] + args.referenceFiles
 
@@ -184,6 +201,41 @@ def main():
         (iPatterns, nPatternsLocal, displacement, mpiTypeMap[iPatternsLocal.dtype]), iPatternsLocal, root=MpiNode.MASTER
     )
     mpiComm.Barrier()
+
+    matchedLinesPerPattern = {}
+    for i in range(nPatternsLocal[mpiRank]):
+        patternString = patternStringList[iPatternsLocal[i]]
+        matchedLinesPerPattern[patternString] = set(listFileMatches(patternString, inputFiles))
+
+    mpiComm.Barrier()
+    if mpiRank == MpiNode.MASTER:
+        for iNode in range(1, mpiSize):
+            matchedLinesPerPattern.update(mpiComm.recv(source=iNode, tag=MpiTag.MATCHED_LINES_PER_PATTERN))
+    else:
+        mpiComm.send(matchedLinesPerPattern, dest=MpiNode.MASTER, tag=MpiTag.MATCHED_LINES_PER_PATTERN)
+    matchedLinesPerPattern = mpiComm.bcast(matchedLinesPerPattern, root=MpiNode.MASTER)
+
+    if mpiRank == MpiNode.MASTER:  # TODO: fix time complexity + parallelize
+        errorPatternIndices = [None] * len(errorFileContents)
+        for iLine in range(len(errorFileContents)):
+            errorPatternIndices[iLine] = set()
+            for iPattern in range(len(patternStringList)):
+                if errorFileContents[iLine] in matchedLinesPerPattern[patternStringList[iPattern]]:
+                    errorPatternIndices[iLine].add(iPattern)
+
+        referencePatternIndices = [None] * len(args.referenceFiles)
+        for iFile in range(len(args.referenceFiles)):
+            referencePatternIndices[iFile] = [None] * len(referenceFileContents[iFile])
+            for iLine in range(len(referenceFileContents[iFile])):
+                referencePatternIndices[iFile][iLine] = set()
+                for iPattern in range(len(patternStringList)):
+                    if referenceFileContents[iFile][iLine] in matchedLinesPerPattern[patternStringList[iPattern]]:
+                        referencePatternIndices[iFile][iLine].add(iPattern)
+    else:
+        errorPatternIndices = None
+        referencePatternIndices = None
+    errorPatternIndices = mpiComm.bcast(errorPatternIndices, root=MpiNode.MASTER)
+    referencePatternIndices = mpiComm.bcast(referencePatternIndices, root=MpiNode.MASTER)
 
     patterns = {}
     for i in range(nPatternsLocal[mpiRank]):
@@ -258,9 +310,7 @@ def main():
     )
     bLinesMatched = bLinesMatched.astype(np.bool_)
     bLinesUnmatched = ~bLinesMatched
-    iLinesUnmatched = collections.Counter(
-        np.array(errorFileContents, dtype=object)[bLinesUnmatched]
-    )  # TODO: only needed on master
+    iLinesUnmatched = np.array(errorFileContents, dtype=object)[bLinesUnmatched]  # TODO: only needed on master
 
     # Generate diff
     if mpiRank == MpiNode.MASTER:
@@ -340,23 +390,46 @@ def main():
             )
         )
 
-        with open(outputFilename, "w") as diffFile:  # TODO: only write to the file once
-            if iLinesUnmatched:
-                iLinesUnmatchedSorted = sorted(
-                    list(iLinesUnmatched), key=lambda item: iLinesUnmatched[item], reverse=True
+        heatmap = np.zeros(len(errorFileContents), dtype=np.float_)
+        for iLine in range(len(errorFileContents)):
+            iPatterns = errorPatternIndices[iLine]
+            if len(iPatterns) == 0:
+                heatmap[iLine] = np.inf
+            else:
+                for iPattern in iPatterns:
+                    if errorFrequencies[iPattern] > frequencyMeans[iPattern]:
+                        heatmap[iLine] += countStddevs(
+                            frequencyMeans[iPattern], frequencyStddevs[iPattern], errorFrequencies[iPattern]
+                        ) / len(iPatterns)
+
+        heatmap[heatmap == np.inf] = -np.inf
+        heatmap[heatmap == -np.inf] = np.max(heatmap)
+        heatmapMax = max(heatmap)
+        assert np.isfinite(np.max(heatmap))
+
+        with PdfPages(outputFilename) as pdf:
+            iPage = 0
+            pdfPage = plt.figure(figsize=a4size)
+            pdfPage.clf()
+            for iLine in range(len(errorFileContents)):
+                if iLine * rowHeight - iPage > 1.0:
+                    pdf.savefig()
+                    plt.close()
+                    pdfPage = plt.figure(figsize=a4size)
+                    pdfPage.clf()
+                    iPage += 1
+                text = pdfPage.text(
+                    0.01,
+                    1 - ((iLine + 1) * rowHeight - iPage),
+                    errorFileContents[iLine].replace("$", "\\$"),
+                    transform=pdfPage.transFigure,
+                    size=fontSize,
+                    ha="left",
                 )
-                diffFile.write(f"# Unmatched lines (x{len(iLinesUnmatched)})\n")
-                for line in iLinesUnmatchedSorted:
-                    diffFile.write(f"> {line} (x{iLinesUnmatched[line]})\n")
-                diffFile.write("\n\n")
-            for patternString in diffFileContentsSorted:
-                if not diffFileContents[patternString]:
-                    continue
-                diffFile.write(
-                    f"# {patternString}, (mean: {frequencyMeansMap[patternString]:.3f}, stddev: {frequencyStddevsMap[patternString]:.3f}, errorfreq: {errorFrequencyMap[patternString]}, stddevs from mean: {countStddevs(frequencyMeansMap[patternString], frequencyStddevsMap[patternString], errorFrequencyMap[patternString]):.3f})\n"
-                )
-                diffFile.write("\n".join(sorted(list(diffFileContents[patternString]))))
-                diffFile.write("\n\n")
+                alpha = alphaMax * heatmap[iLine] / heatmapMax / errorFileContentsCounter[errorFileContents[iLine]]
+                text.set_bbox(dict(facecolor=colorGreen, alpha=alpha, linewidth=0.0))
+            pdf.savefig()
+            plt.close()
 
         print(f"[{time.time() - timeStart:.3f}] Done.")
 
