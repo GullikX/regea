@@ -372,10 +372,7 @@ def main():
             pdfPage.clf()
             for iLine in range(len(errorFileContents)):
                 if iLine * rowHeight - iPage > 1.0:
-                    try:
-                        pdf.savefig()
-                    except:
-                        pass
+                    pdf.savefig()
                     plt.close()
                     pdfPage = plt.figure(figsize=a4size)
                     pdfPage.clf()
@@ -383,7 +380,7 @@ def main():
                 text = pdfPage.text(
                     0.01,
                     1 - ((iLine + 1) * rowHeight - iPage),
-                    errorFileContents[iLine],
+                    errorFileContents[iLine].replace("$", "\\$"),
                     transform=pdfPage.transFigure,
                     size=fontSize,
                     ha="left",
