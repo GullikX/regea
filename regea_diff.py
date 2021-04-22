@@ -26,6 +26,7 @@ from mpi4py import MPI
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.pyplot as plt
 import numpy as np
+import random
 import regex as re
 import subprocess
 import sys
@@ -44,7 +45,7 @@ fontSize = 8
 rowHeight = 0.019
 
 colorGreen = "#4CAF50"
-# colorRed = "#F44336"
+colorRed = "#F44336"
 # colorAmber = "#FFC107"
 alphaMax = 0.8
 
@@ -407,11 +408,23 @@ def main():
         heatmapMax = max(heatmap)
         assert np.isfinite(np.max(heatmap))
 
+        errorFileContentsWithMissing = errorFileContents.copy()
+        heatmapWithMissing = list(heatmap.copy())
+        for iPattern in range(len(patternStringList)):  # TODO: use ordering rules instead of random
+            if frequencyStddevs[iPattern] == 0 and errorFrequencies[iPattern] < frequencyMeans[iPattern]:
+                iInsert = random.randint(0, len(errorFileContentsWithMissing))
+                line = random.choice(list(matchedLinesPerPattern[patternStringList[iPattern]]))
+                if line not in errorFileContentsCounter:
+                    errorFileContentsWithMissing.insert(iInsert, line)
+                    heatmapWithMissing.insert(iInsert, -heatmapMax)
+
+            assert len(errorFileContentsWithMissing) == len(heatmapWithMissing)
+
         with PdfPages(outputFilename) as pdf:
             iPage = 0
             pdfPage = plt.figure(figsize=a4size)
             pdfPage.clf()
-            for iLine in range(len(errorFileContents)):
+            for iLine in range(len(errorFileContentsWithMissing)):
                 if iLine * rowHeight - iPage > 1.0:
                     pdf.savefig()
                     plt.close()
@@ -421,13 +434,23 @@ def main():
                 text = pdfPage.text(
                     0.01,
                     1 - ((iLine + 1) * rowHeight - iPage),
-                    errorFileContents[iLine].replace("$", "\\$"),
+                    errorFileContentsWithMissing[iLine].replace("$", "\\$"),
                     transform=pdfPage.transFigure,
                     size=fontSize,
                     ha="left",
                 )
-                alpha = alphaMax * heatmap[iLine] / heatmapMax / errorFileContentsCounter[errorFileContents[iLine]]
-                text.set_bbox(dict(facecolor=colorGreen, alpha=alpha, linewidth=0.0))
+                if heatmapWithMissing[iLine] >= 0:
+                    alpha = (
+                        alphaMax
+                        * heatmapWithMissing[iLine]
+                        / heatmapMax
+                        / errorFileContentsCounter[errorFileContentsWithMissing[iLine]]
+                    )
+                    color = colorGreen
+                else:
+                    alpha = -alphaMax * heatmapWithMissing[iLine] / heatmapMax
+                    color = colorRed
+                text.set_bbox(dict(facecolor=color, alpha=alpha, linewidth=0.0))
             pdf.savefig()
             plt.close()
 
