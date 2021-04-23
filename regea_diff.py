@@ -22,21 +22,26 @@
 import argparse
 import collections
 import enum
-from mpi4py import MPI
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.pyplot as plt
+from mpi4py import MPI
 import numpy as np
 import random
-import regex as re
 import subprocess
 import sys
 import time
 
 argsDefault = {
     "patternFilename": "regea.output.patterns",
-    "outputFilenameSuffix": "diff.pdf",
-    "threshold": 1.0,  # Number of standard deviations
+    "outputFilenameDiffSuffix": "diff.pdf",
+    "outputFilenameOrderingSuffix": "ordering.pdf",
+    "iterationTimeLimit": 600.0,  # seconds
+    "ruleValidityThreshold": 0.90,
 }
+
+grepCmd = ["rg", "--no-config", "--no-multiline"]
+grepVersionCmd = grepCmd + ["--version"]
+grepListMatchesCmd = grepCmd + ["--no-filename", "--no-line-number", "--"]
 
 plt.rcParams.update({"font.family": "monospace"})
 
@@ -46,13 +51,8 @@ rowHeight = 0.019
 
 colorGreen = "#4CAF50"
 colorRed = "#F44336"
-# colorAmber = "#FFC107"
+colorAmber = "#FFC107"
 alphaMax = 0.8
-
-grepCmd = ["rg", "--no-config", "--pcre2", "--no-multiline"]
-grepVersionCmd = grepCmd + ["--version"]
-grepCountMatchesCmd = grepCmd + ["--count", "--with-filename", "--include-zero", "--"]
-grepListMatchesCmd = grepCmd + ["--no-filename", "--no-line-number", "--"]
 
 # OpenMPI parameters
 mpiSizeMin = 2  # Need at least two nodes for master-worker setup
@@ -61,7 +61,6 @@ mpiSize = mpiComm.Get_size()
 mpiRank = mpiComm.Get_rank()
 nWorkerNodes = mpiSize - 1
 mpiTypeMap = {
-    np.dtype("bool_"): MPI.BOOL,
     np.dtype("float_"): MPI.DOUBLE,
     np.dtype("int_"): MPI.LONG,
 }
@@ -71,13 +70,19 @@ timeStart = time.time()
 
 
 # Enums
-class MpiTag(enum.IntEnum):
-    DIFF_FILE_CONTENTS = 0
-    MATCHED_LINES_PER_PATTERN = 1
+class Index(enum.IntEnum):
+    INVALID = -1
 
 
 class MpiNode(enum.IntEnum):
     MASTER = 0
+
+
+class MpiTag(enum.IntEnum):
+    RULES = 0
+    RULES_PER_PATTERN = 1
+    RULE_VALIDITIES = 2
+    MATCHED_LINES_PER_PATTERN = 3
 
 
 class Stream(enum.IntEnum):
@@ -85,22 +90,87 @@ class Stream(enum.IntEnum):
     STDERR = 1
 
 
+# Classes
+class RuleType(enum.IntEnum):
+    BEFORE_ALL = 0
+    AFTER_ALL = 1
+    BEFORE_ANY = 2
+    AFTER_ANY = 3
+    DIRECTLY_BEFORE = 4
+    DIRECTLY_AFTER = 5
+
+
+class Rule:
+    def __init__(self, patternStringList):
+        self.iPattern = random.randint(0, len(patternStringList) - 1)
+        self.iPatternOther = random.randint(0, len(patternStringList) - 1)
+        self.patternString = patternStringList[self.iPattern]
+        self.patternStringOther = patternStringList[self.iPatternOther]
+        self.type = random.randint(0, len(RuleType) - 1)
+
+    def evaluate(self, patternIndices, iLineTarget=None):
+        if self.iPattern == self.iPatternOther:
+            return False
+
+        iPatternMatches = set()
+        iPatternOtherMatches = set()
+
+        for iLine in range(len(patternIndices)):
+            if self.iPattern in patternIndices[iLine]:
+                iPatternMatches.add(iLine)
+            if self.iPatternOther in patternIndices[iLine]:
+                iPatternOtherMatches.add(iLine)
+
+        if iLineTarget is not None:
+            assert iLineTarget in iPatternMatches, f"Rule '{self}' is invalid for line {iLine}"
+            iPatternMatches = set([iLineTarget])
+
+        if len(iPatternMatches) == 0 or len(iPatternOtherMatches) == 0:
+            return False
+
+        if self.type == RuleType.BEFORE_ALL:
+            if not max(iPatternMatches) < min(iPatternOtherMatches):
+                return False
+        elif self.type == RuleType.AFTER_ALL:
+            if not min(iPatternMatches) > max(iPatternOtherMatches):
+                return False
+        elif self.type == RuleType.BEFORE_ANY:
+            if not min(iPatternMatches) < min(iPatternOtherMatches):
+                return False
+        elif self.type == RuleType.AFTER_ANY:
+            if not max(iPatternMatches) > max(iPatternOtherMatches):
+                return False
+        elif self.type == RuleType.DIRECTLY_BEFORE:
+            return False  # TODO
+            if len(iPatternOtherMatches) < len(iPatternMatches):
+                return False
+            for iPatternMatch in iPatternMatches:
+                if not len(np.where(iPatternOtherMatches - iPatternMatch == 1)[0]):
+                    return False
+        elif self.type == RuleType.DIRECTLY_AFTER:
+            return False  # TODO
+            for iPatternMatch in iPatternMatches:
+                if not len(np.where(iPatternOtherMatches - iPatternMatch == -1)[0]):
+                    return False
+        else:
+            raise NotImplementedError(f"Unknown rule type {RuleType(self.type).name}")
+
+        return True
+
+    def __str__(self):
+        return f"Pattern '{self.patternString}' always matches {RuleType(self.type).name} pattern '{self.patternStringOther}'"
+
+    def __hash__(self):
+        return hash(str(self))
+
+    def __eq__(self, other):
+        return self.__hash__() == other.__hash__()
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+
 # Util functions
-def countFileMatches(patternString, filenames):
-    assert len(filenames) > 0
-    process = subprocess.Popen(
-        grepCountMatchesCmd + [patternString] + filenames,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    output = process.communicate()
-    assert len(output[Stream.STDERR]) == 0, f"{output[Stream.STDERR].decode()}"
-    nMatches = dict(count.split(":") for count in output[Stream.STDOUT].decode().splitlines())
-    for filename in nMatches:
-        nMatches[filename] = int(nMatches[filename])
-    return nMatches
-
-
 def listFileMatches(patternString, filenames):
     assert len(filenames) > 0
     process = subprocess.Popen(
@@ -125,7 +195,7 @@ def countStddevs(mean, stddev, value):
 
 def main():
     argParser = argparse.ArgumentParser(
-        description="Regea - Regular expression evolutionary algorithm log file analyzer (diff generator)"
+        description="Regea - Regular expression evolutionary algorithm log file analyzer (ordering checker)"
     )
     argParser.add_argument(f"--errorFile", type=str, metavar="ERRORFILE", required=True)  # TODO: allow multiple
     for arg in argsDefault:
@@ -142,22 +212,6 @@ def main():
         print(f"Error: Needs at least {mpiSizeMin} mpi nodes (current mpiSize: {mpiSize})")
         return 1
 
-    errorFileContents = [None]
-    with open(args.errorFile, "r") as f:
-        errorFileContents = f.read().splitlines()
-    errorFileContents = list(filter(None, errorFileContents))
-    errorFileContentsCounter = collections.Counter(errorFileContents)
-
-    referenceFileContents = [None] * len(args.referenceFiles)
-    referenceFileContentsCounter = [None] * len(args.referenceFiles)
-    for iFile in range(len(args.referenceFiles)):
-        with open(args.referenceFiles[iFile], "r") as f:
-            referenceFileContents[iFile] = f.read().splitlines()
-        referenceFileContents[iFile] = list(filter(None, referenceFileContents[iFile]))
-        referenceFileContentsCounter[iFile] = collections.Counter(referenceFileContents[iFile])
-
-    inputFiles = [args.errorFile] + args.referenceFiles
-
     try:
         subprocess.check_call(grepVersionCmd, stdout=subprocess.DEVNULL)
     except FileNotFoundError:
@@ -172,6 +226,24 @@ def main():
             datatype.itemsize == mpiTypeMap[datatype].Get_size()
         ), f"Datatype mpiSize mismatch: data type '{datatype.name}' has mpiSize {datatype.itemsize} while '{mpiTypeMap[datatype].name}' has mpiSize {mpiTypeMap[datatype].Get_size()}. Please adjust the mpiTypeMap parameter."
 
+    # Load error file
+    errorFileContents = [None]
+    with open(args.errorFile, "r") as f:
+        errorFileContents = f.read().splitlines()
+    errorFileContents = list(filter(None, errorFileContents))
+    errorFileContentsCounter = collections.Counter(errorFileContents)
+
+    # Load reference files
+    referenceFileContents = [None] * len(args.referenceFiles)
+    referenceFileContentsCounter = [None] * len(args.referenceFiles)
+    for iFile in range(len(args.referenceFiles)):
+        with open(args.referenceFiles[iFile], "r") as f:
+            referenceFileContents[iFile] = f.read().splitlines()
+        referenceFileContents[iFile] = list(filter(None, referenceFileContents[iFile]))
+        referenceFileContentsCounter[iFile] = collections.Counter(referenceFileContents[iFile])
+
+    inputFiles = [args.errorFile] + args.referenceFiles
+
     # Load training result
     if mpiRank == MpiNode.MASTER:
         print(f"[{time.time() - timeStart:.3f}] Loading training result...")
@@ -183,9 +255,9 @@ def main():
     patternStringList = mpiComm.bcast(patternStringList, root=MpiNode.MASTER)
     nPatterns = len(patternStringList)
 
-    # Check for discrepancies
+    # Check which lines are matched by which patterns
     if mpiRank == MpiNode.MASTER:
-        print(f"[{time.time() - timeStart:.3f}] Compiling regex patterns...")
+        print(f"[{time.time() - timeStart:.3f}] Evaluating regex patterns...")
         iPatterns = np.linspace(0, nPatterns - 1, nPatterns, dtype=np.int_)
     else:
         iPatterns = None
@@ -238,189 +310,137 @@ def main():
     errorPatternIndices = mpiComm.bcast(errorPatternIndices, root=MpiNode.MASTER)
     referencePatternIndices = mpiComm.bcast(referencePatternIndices, root=MpiNode.MASTER)
 
-    patterns = {}
-    for i in range(nPatternsLocal[mpiRank]):
-        patterns[patternStringList[iPatternsLocal[i]]] = re.compile(patternStringList[iPatternsLocal[i]])
-
+    # Generate ordering rules
     if mpiRank == MpiNode.MASTER:
-        print(f"[{time.time() - timeStart:.3f}] Calculating pattern match frequencies...")
-    referenceFrequenciesLocal = [None] * nPatternsLocal[mpiRank]
-    errorFrequenciesLocal = np.zeros(nPatternsLocal[mpiRank], dtype=np.int_)
-    bPatternsDeviatingLocal = np.zeros(nPatternsLocal[mpiRank], dtype=np.bool_)
+        print(f"[{time.time() - timeStart:.3f}] Generating ordering rules for {args.iterationTimeLimit} seconds...")
+    rules = set()
+    ruleValidities = {}
+    timeIterationStart = time.time()
 
-    for i in range(nPatternsLocal[mpiRank]):
-        frequencies = countFileMatches(patternStringList[iPatternsLocal[i]], inputFiles)
-        errorFrequenciesLocal[i] = frequencies[args.errorFile]
-        del frequencies[args.errorFile]
-        referenceFrequenciesLocal[i] = list(frequencies.values())
-
-    referenceFrequenciesLocal = np.array(referenceFrequenciesLocal, dtype=np.float_)
-
-    frequencyMeansLocal = referenceFrequenciesLocal.mean(axis=1)
-    frequencyStddevsLocal = referenceFrequenciesLocal.std(axis=1)
-
-    for i in range(nPatternsLocal[mpiRank]):
-        bPatternsDeviatingLocal[i] = (
-            countStddevs(frequencyMeansLocal[i], frequencyStddevsLocal[i], errorFrequenciesLocal[i]) > args.threshold
-        )
-
-    if mpiRank == MpiNode.MASTER:
-        frequencyMeans = np.zeros(nPatterns, dtype=np.float_)
-        frequencyStddevs = np.zeros(nPatterns, dtype=np.float_)
-        errorFrequencies = np.zeros(nPatterns, dtype=np.int_)
-        bPatternsDeviating = np.zeros(nPatterns, dtype=np.bool_)
-    else:
-        frequencyMeans = None
-        frequencyStddevs = None
-        errorFrequencies = None
-        bPatternsDeviating = None
-
-    mpiComm.Gatherv(
-        frequencyMeansLocal,
-        (frequencyMeans, nPatternsLocal, displacement, mpiTypeMap[frequencyMeansLocal.dtype]),
-        root=MpiNode.MASTER,
-    )
-    mpiComm.Gatherv(
-        frequencyStddevsLocal,
-        (frequencyStddevs, nPatternsLocal, displacement, mpiTypeMap[frequencyStddevsLocal.dtype]),
-        root=MpiNode.MASTER,
-    )
-    mpiComm.Gatherv(
-        errorFrequenciesLocal,
-        (errorFrequencies, nPatternsLocal, displacement, mpiTypeMap[errorFrequenciesLocal.dtype]),
-        root=MpiNode.MASTER,
-    )
-    mpiComm.Gatherv(
-        bPatternsDeviatingLocal,
-        (bPatternsDeviating, nPatternsLocal, displacement, mpiTypeMap[bPatternsDeviatingLocal.dtype]),
-        root=MpiNode.MASTER,
-    )
-
-    # Check for unmatched lines
-    if mpiRank == MpiNode.MASTER:
-        print(f"[{time.time() - timeStart:.3f}] Checking for unmatched lines...")
-    bLinesMatched = np.zeros(len(errorFileContents), dtype=np.int_)  # Use int since MPI cannot reduce bool type
-    bLinesMatchedLocal = np.zeros(len(errorFileContents), dtype=np.int_)
-    for i in range(nPatternsLocal[mpiRank]):
-        for iLine in range(len(errorFileContents)):
-            if patterns[patternStringList[iPatternsLocal[i]]].match(errorFileContents[iLine]) is not None:
-                bLinesMatchedLocal[iLine] = 1
-
-    mpiComm.Allreduce(
-        bLinesMatchedLocal, (bLinesMatched, len(errorFileContents), mpiTypeMap[bLinesMatchedLocal.dtype]), op=MPI.MAX
-    )
-    bLinesMatched = bLinesMatched.astype(np.bool_)
-    bLinesUnmatched = ~bLinesMatched
-    iLinesUnmatched = np.array(errorFileContents, dtype=object)[bLinesUnmatched]  # TODO: only needed on master
-
-    # Generate diff
-    if mpiRank == MpiNode.MASTER:
-        print(f"[{time.time() - timeStart:.3f}] Generating diff file...")
-        iPatternsDeviating = iPatterns[bPatternsDeviating]
-        nPatternsDeviating = len(iPatternsDeviating)
-    else:
-        iPatternsDeviating = None
-        nPatternsDeviating = None
-
-    nPatternsDeviating = mpiComm.bcast(nPatternsDeviating, root=MpiNode.MASTER)
-    nPatternsDeviatingLocal = np.array([nPatternsDeviating // mpiSize] * mpiSize, dtype=np.int_)
-    nPatternsDeviatingLocal[: (nPatternsDeviating % mpiSize)] += 1
-    iPatternsDeviatingLocal = np.zeros(nPatternsDeviatingLocal[mpiRank], dtype=np.int_)
-
-    displacementDeviating = [0] * mpiSize
-    for iNode in range(1, mpiSize):
-        displacementDeviating[iNode] = displacementDeviating[iNode - 1] + nPatternsDeviatingLocal[iNode - 1]
-
-    mpiComm.Scatterv(
-        (iPatternsDeviating, nPatternsDeviatingLocal, displacementDeviating, mpiTypeMap[iPatternsDeviatingLocal.dtype]),
-        iPatternsDeviatingLocal,
-        root=MpiNode.MASTER,
-    )
-    mpiComm.Barrier()
-
-    diffFileContents = {}
-
-    for i in range(nPatternsDeviatingLocal[mpiRank]):
-        pattern = patternStringList[iPatternsDeviatingLocal[i]]
-        diffFileContents[pattern] = set()
-
-        errorFileMatches = collections.Counter(listFileMatches(pattern, [args.errorFile]))
-        referenceFileMatches = collections.Counter(listFileMatches(pattern, args.referenceFiles))
-
-        for match in set(errorFileMatches).difference(set(referenceFileMatches)):
-            diffFileContents[pattern].add(f"> {match} (x{errorFileMatches[match]:.3f})")
-
-        for match in set(referenceFileMatches).difference(set(errorFileMatches)):
-            diffFileContents[pattern].add(f"< {match} (x{referenceFileMatches[match] / len(args.referenceFiles):.3f})")
-
-        for match in set(referenceFileMatches).union(set(errorFileMatches)):
-            count = errorFileMatches[match] * len(args.referenceFiles) - referenceFileMatches[match]
-            if count > 0:
-                diffFileContents[pattern].add(f"> {match} (x{count / len(args.referenceFiles):.3f})")
-            elif count < 0:
-                diffFileContents[pattern].add(f"< {match} (x{-count / len(args.referenceFiles):.3f})")
+    while time.time() - timeIterationStart < args.iterationTimeLimit:
+        rule = Rule(patternStringList)
+        if rule in rules:
+            continue
+        ruleValidities[rule] = 1.0
+        for iFile in range(len(args.referenceFiles)):
+            if not rule.evaluate(referencePatternIndices[iFile]):
+                ruleValidities[rule] -= 1.0 / len(args.referenceFiles)
+                if ruleValidities[rule] < args.ruleValidityThreshold:
+                    del ruleValidities[rule]
+                    break
+        else:
+            rules.add(rule)
 
     # TODO: See if it's possible to use gather
     mpiComm.Barrier()
     if mpiRank == MpiNode.MASTER:
+        print(f"[{time.time() - timeStart:.3f}] Gathering ordering rules...")
         for iNode in range(1, mpiSize):
-            diffFileContents.update(mpiComm.recv(source=iNode, tag=MpiTag.DIFF_FILE_CONTENTS))
+            rules.update(mpiComm.recv(source=iNode, tag=MpiTag.RULES))
+            ruleValidities.update(mpiComm.recv(source=iNode, tag=MpiTag.RULE_VALIDITIES))
     else:
-        mpiComm.send(diffFileContents, dest=MpiNode.MASTER, tag=MpiTag.DIFF_FILE_CONTENTS)
+        mpiComm.send(rules, dest=MpiNode.MASTER, tag=MpiTag.RULES)
+        mpiComm.send(ruleValidities, dest=MpiNode.MASTER, tag=MpiTag.RULE_VALIDITIES)
+    rules = mpiComm.bcast(rules, root=MpiNode.MASTER)
+    ruleValidities = mpiComm.bcast(ruleValidities, root=MpiNode.MASTER)
 
-    # Write results to disk
+    # Generate ordering heatmap
     if mpiRank == MpiNode.MASTER:
-        outputFilename = f"{args.errorFile}.{args.outputFilenameSuffix}"
-        print(f"[{time.time() - timeStart:.3f}] Writing results to '{outputFilename}'...")
+        print(f"[{time.time() - timeStart:.3f}] Checking for violated rules...")
+        orderingHeatmap = np.zeros(len(errorFileContents), dtype=np.float_)
+        for iLine in range(len(errorFileContents)):  # TODO: parallelize (mpi reduce?)
+            for rule in [rule for rule in rules if rule.iPattern in errorPatternIndices[iLine]]:
+                if not rule.evaluate(errorPatternIndices, iLine):
+                    orderingHeatmap[iLine] += ruleValidities[rule]
+        orderingHeatmapMax = max(orderingHeatmap)
 
-        frequencyMeansMap = {}
-        frequencyStddevsMap = {}
-        errorFrequencyMap = {}
-        for iPattern in range(nPatterns):
-            frequencyMeansMap[patternStringList[iPattern]] = frequencyMeans[iPattern]
-            frequencyStddevsMap[patternStringList[iPattern]] = frequencyStddevs[iPattern]
-            errorFrequencyMap[patternStringList[iPattern]] = errorFrequencies[iPattern]
+    # Check for unmatched lines TODO: parellelize
+    if mpiRank == MpiNode.MASTER:
+        print(f"[{time.time() - timeStart:.3f}] Checking for unmatched lines...")
+    bLinesUnmatched = np.zeros(len(errorFileContents), dtype=np.bool_)
+    for iLine in range(len(errorFileContents)):
+        bLinesUnmatched = len(errorPatternIndices[iLine]) == 0
 
-        diffFileContentsSorted = dict(
-            sorted(
-                diffFileContents.items(),
-                key=lambda item: countStddevs(
-                    frequencyMeansMap[item[0]], frequencyStddevsMap[item[0]], errorFrequencyMap[item[0]]
-                ),
-                reverse=True,
-            )
-        )
+    # Calculate pattern match frequencies TODO: parallelize
+    if mpiRank == MpiNode.MASTER:
+        print(f"[{time.time() - timeStart:.3f}] Calculating pattern match frequencies...")
+    referenceFrequencies = np.zeros((len(args.referenceFiles), nPatterns))
+    for iFile in range(len(args.referenceFiles)):
+        for iLine in range(len(referenceFileContents[iFile])):
+            for iPattern in referencePatternIndices[iFile][iLine]:
+                referenceFrequencies[iFile][iPattern] += 1
+    errorFrequencies = np.zeros(nPatterns)
+    for iLine in range(len(errorFileContents)):
+        for iPattern in errorPatternIndices[iLine]:
+            errorFrequencies[iPattern] += 1
+    frequencyMeans = referenceFrequencies.mean(axis=0)
+    frequencyStddevs = referenceFrequencies.std(axis=0)
+    assert len(frequencyMeans) == nPatterns
+    assert len(frequencyStddevs) == nPatterns
 
-        heatmap = np.zeros(len(errorFileContents), dtype=np.float_)
+    # Generate diff heatmap TODO: parellelize
+    if mpiRank == MpiNode.MASTER:
+        diffHeatmap = np.zeros(len(errorFileContents), dtype=np.float_)
         for iLine in range(len(errorFileContents)):
             iPatterns = errorPatternIndices[iLine]
             if len(iPatterns) == 0:
-                heatmap[iLine] = np.inf
+                diffHeatmap[iLine] = np.inf
             else:
                 for iPattern in iPatterns:
                     if errorFrequencies[iPattern] > frequencyMeans[iPattern]:
-                        heatmap[iLine] += countStddevs(
+                        diffHeatmap[iLine] += countStddevs(
                             frequencyMeans[iPattern], frequencyStddevs[iPattern], errorFrequencies[iPattern]
                         ) / len(iPatterns)
 
-        heatmap[heatmap == np.inf] = -np.inf
-        heatmap[heatmap == -np.inf] = np.max(heatmap)
-        heatmapMax = max(heatmap)
-        assert np.isfinite(np.max(heatmap))
+        diffHeatmap[diffHeatmap == np.inf] = -np.inf
+        diffHeatmap[diffHeatmap == -np.inf] = np.max(diffHeatmap)
+        diffHeatmapMax = max(diffHeatmap)
+        assert np.isfinite(np.max(diffHeatmap))
 
         errorFileContentsWithMissing = errorFileContents.copy()
-        heatmapWithMissing = list(heatmap.copy())
+        diffHeatmapWithMissing = list(diffHeatmap.copy())
         for iPattern in range(len(patternStringList)):  # TODO: use ordering rules instead of random
             if frequencyStddevs[iPattern] == 0 and errorFrequencies[iPattern] < frequencyMeans[iPattern]:
                 iInsert = random.randint(0, len(errorFileContentsWithMissing))
                 line = random.choice(list(matchedLinesPerPattern[patternStringList[iPattern]]))
                 if line not in errorFileContentsCounter:
                     errorFileContentsWithMissing.insert(iInsert, line)
-                    heatmapWithMissing.insert(iInsert, -heatmapMax)
+                    diffHeatmapWithMissing.insert(iInsert, -diffHeatmapMax)
 
-            assert len(errorFileContentsWithMissing) == len(heatmapWithMissing)
+            assert len(errorFileContentsWithMissing) == len(diffHeatmapWithMissing)
 
-        with PdfPages(outputFilename) as pdf:
+    # Write results to disk
+    if mpiRank == MpiNode.MASTER:
+        outputFilenameOrdering = f"{args.errorFile}.{args.outputFilenameOrderingSuffix}"
+        print(f"[{time.time() - timeStart:.3f}] Writing ordering deviations to '{outputFilenameOrdering}'...")
+
+        with PdfPages(outputFilenameOrdering) as pdf:
+            iPage = 0
+            pdfPage = plt.figure(figsize=a4size)
+            pdfPage.clf()
+            for iLine in range(len(errorFileContents)):
+                if iLine * rowHeight - iPage > 1.0:
+                    pdf.savefig()
+                    plt.close()
+                    pdfPage = plt.figure(figsize=a4size)
+                    pdfPage.clf()
+                    iPage += 1
+                text = pdfPage.text(
+                    0.01,
+                    1 - ((iLine + 1) * rowHeight - iPage),
+                    errorFileContents[iLine].replace("$", "\\$"),
+                    transform=pdfPage.transFigure,
+                    size=fontSize,
+                    ha="left",
+                )
+                alpha = alphaMax * orderingHeatmap[iLine] / orderingHeatmapMax
+                text.set_bbox(dict(facecolor=colorAmber, alpha=alpha, linewidth=0.0))
+            pdf.savefig()
+            plt.close()
+
+        outputFilenameDiff = f"{args.errorFile}.{args.outputFilenameDiffSuffix}"
+        print(f"[{time.time() - timeStart:.3f}] Writing diff deviations to '{outputFilenameDiff}'...")
+        with PdfPages(outputFilenameDiff) as pdf:
             iPage = 0
             pdfPage = plt.figure(figsize=a4size)
             pdfPage.clf()
@@ -439,16 +459,16 @@ def main():
                     size=fontSize,
                     ha="left",
                 )
-                if heatmapWithMissing[iLine] >= 0:
+                if diffHeatmapWithMissing[iLine] >= 0:
                     alpha = (
                         alphaMax
-                        * heatmapWithMissing[iLine]
-                        / heatmapMax
+                        * diffHeatmapWithMissing[iLine]
+                        / diffHeatmapMax
                         / errorFileContentsCounter[errorFileContentsWithMissing[iLine]]
                     )
                     color = colorGreen
                 else:
-                    alpha = -alphaMax * heatmapWithMissing[iLine] / heatmapMax
+                    alpha = -alphaMax * diffHeatmapWithMissing[iLine] / diffHeatmapMax
                     color = colorRed
                 text.set_bbox(dict(facecolor=color, alpha=alpha, linewidth=0.0))
             pdf.savefig()
