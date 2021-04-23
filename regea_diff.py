@@ -227,6 +227,8 @@ def main():
         ), f"Datatype mpiSize mismatch: data type '{datatype.name}' has mpiSize {datatype.itemsize} while '{mpiTypeMap[datatype].name}' has mpiSize {mpiTypeMap[datatype].Get_size()}. Please adjust the mpiTypeMap parameter."
 
     # Load error file
+    if mpiRank == MpiNode.MASTER:
+        print(f"[{time.time() - timeStart:.3f}] Loading input files...")
     errorFileContents = [None]
     with open(args.errorFile, "r") as f:
         errorFileContents = f.read().splitlines()
@@ -331,7 +333,6 @@ def main():
         else:
             rules.add(rule)
 
-    # TODO: See if it's possible to use gather
     mpiComm.Barrier()
     if mpiRank == MpiNode.MASTER:
         print(f"[{time.time() - timeStart:.3f}] Gathering ordering rules...")
@@ -344,13 +345,13 @@ def main():
     rules = mpiComm.bcast(rules, root=MpiNode.MASTER)
     ruleValidities = mpiComm.bcast(ruleValidities, root=MpiNode.MASTER)
 
-    # Generate ordering heatmap
+    # Generate ordering heatmap TODO: parallelize
     if mpiRank == MpiNode.MASTER:
         print(f"[{time.time() - timeStart:.3f}] Checking for violated rules...")
         orderingHeatmap = np.zeros(len(errorFileContents), dtype=np.float_)
         for iLine in range(len(errorFileContents)):  # TODO: parallelize (mpi reduce?)
             for rule in [rule for rule in rules if rule.iPattern in errorPatternIndices[iLine]]:
-                if not rule.evaluate(errorPatternIndices, iLine):
+                if not rule.evaluate(errorPatternIndices, iLineTarget=iLine):
                     orderingHeatmap[iLine] += ruleValidities[rule]
         orderingHeatmapMax = max(orderingHeatmap)
 
@@ -399,13 +400,30 @@ def main():
 
         errorFileContentsWithMissing = errorFileContents.copy()
         diffHeatmapWithMissing = list(diffHeatmap.copy())
-        for iPattern in range(len(patternStringList)):  # TODO: use ordering rules instead of random
+        for iPattern in range(len(patternStringList)):
             if frequencyStddevs[iPattern] == 0 and errorFrequencies[iPattern] < frequencyMeans[iPattern]:
-                iInsert = random.randint(0, len(errorFileContentsWithMissing))
-                line = random.choice(list(matchedLinesPerPattern[patternStringList[iPattern]]))
-                if line not in errorFileContentsCounter:
-                    errorFileContentsWithMissing.insert(iInsert, line)
-                    diffHeatmapWithMissing.insert(iInsert, -diffHeatmapMax)
+                for lineToInsert in matchedLinesPerPattern[patternStringList[iPattern]]:
+                    if lineToInsert not in errorFileContentsCounter:
+                        break
+                else:
+                    continue
+                rulesForPattern = [
+                    rule for rule in rules if rule.iPattern == iPattern or rule.iPatternOther == iPattern
+                ]
+                nRulesValid = np.zeros(len(errorFileContentsWithMissing))
+                for iInsert in range(len(errorFileContentsWithMissing)):
+                    errorFileContentsTemp = errorFileContentsWithMissing.copy()
+                    errorFileContents.insert(iInsert, lineToInsert)
+                    errorPatternIndicesTemp = errorPatternIndices.copy()
+                    errorPatternIndicesTemp.insert(iInsert, set([iPattern]))
+
+                    for rule in rulesForPattern:
+                        if rule.evaluate(errorPatternIndicesTemp):
+                            nRulesValid[iInsert] += 1
+                iInsertBest = nRulesValid.argmax()
+                errorFileContentsWithMissing.insert(iInsertBest, lineToInsert)
+                diffHeatmapWithMissing.insert(iInsertBest, -diffHeatmapMax)
+                # print(f"[{time.time() - timeStart:.3f}] Added line '{lineToInsert}' at position {iInsertBest}")
 
             assert len(errorFileContentsWithMissing) == len(diffHeatmapWithMissing)
 
