@@ -242,9 +242,9 @@ def main():
     patternStringList = mpiComm.bcast(patternStringList, root=MpiNode.MASTER)
     nPatterns = len(patternStringList)
 
-    # Convert log entries to lists of pattern indices
+    # Check which lines are matched by which patterns
     if mpiRank == MpiNode.MASTER:
-        print(f"[{time.time() - timeStart:.3f}] Performing initial ordering check...")
+        print(f"[{time.time() - timeStart:.3f}] Checking regex pattern matches...")
         iPatterns = np.linspace(0, nPatterns - 1, nPatterns, dtype=np.int_)
     else:
         iPatterns = None
@@ -300,7 +300,6 @@ def main():
     if mpiRank == MpiNode.MASTER:
         print(f"[{time.time() - timeStart:.3f}] Generating ordering rules for {args.iterationTimeLimit} seconds...")
     rules = set()
-    violatedRulesPerPattern = {}
     ruleValidities = {}
     timeIterationStart = time.time()
 
@@ -317,27 +316,16 @@ def main():
                     break
         else:
             rules.add(rule)
-            if not rule.evaluate(errorPatternIndices):
-                if rule.patternString not in violatedRulesPerPattern:
-                    violatedRulesPerPattern[rule.patternString] = set()
-                violatedRulesPerPattern[rule.patternString].add(rule)
-                if rule.patternStringOther not in violatedRulesPerPattern:
-                    violatedRulesPerPattern[rule.patternStringOther] = set()
-                violatedRulesPerPattern[rule.patternStringOther].add(rule)
 
     # TODO: See if it's possible to use gather
     mpiComm.Barrier()
     if mpiRank == MpiNode.MASTER:
-        print(f"[{time.time() - timeStart:.3f}] Gathering results...")
-        print(f"[{time.time() - timeStart:.3f}] [0] {len(rules)}")
+        print(f"[{time.time() - timeStart:.3f}] Gathering ordering rules...")
         for iNode in range(1, mpiSize):
             rules.update(mpiComm.recv(source=iNode, tag=MpiTag.RULES))
-            violatedRulesPerPattern.update(mpiComm.recv(source=iNode, tag=MpiTag.RULES_PER_PATTERN))
             ruleValidities.update(mpiComm.recv(source=iNode, tag=MpiTag.RULE_VALIDITIES))
-            print(f"[{time.time() - timeStart:.3f}] [{iNode}] {len(rules)}")
     else:
         mpiComm.send(rules, dest=MpiNode.MASTER, tag=MpiTag.RULES)
-        mpiComm.send(violatedRulesPerPattern, dest=MpiNode.MASTER, tag=MpiTag.RULES_PER_PATTERN)
         mpiComm.send(ruleValidities, dest=MpiNode.MASTER, tag=MpiTag.RULE_VALIDITIES)
     rules = mpiComm.bcast(rules, root=MpiNode.MASTER)
     ruleValidities = mpiComm.bcast(ruleValidities, root=MpiNode.MASTER)
@@ -347,7 +335,6 @@ def main():
         print(f"[{time.time() - timeStart:.3f}] Checking for violated rules...")
         heatmap = np.zeros(len(errorFileContents), dtype=np.float_)
         for iLine in range(len(errorFileContents)):  # TODO: parallelize (mpi reduce)
-            print(f"iLine = {iLine}/{len(errorFileContents)} ({int(100 * iLine / len(errorFileContents))}%)")
             for rule in [rule for rule in rules if rule.iPattern in errorPatternIndices[iLine]]:
                 if not rule.evaluate(errorPatternIndices, iLine):
                     heatmap[iLine] += ruleValidities[rule]
@@ -355,16 +342,6 @@ def main():
 
         outputFilename = f"{args.errorFile}.{args.outputFilenameSuffix}"
         print(f"[{time.time() - timeStart:.3f}] Writing results to '{outputFilename}'...")
-
-        #for patternString in list(
-        #    dict(sorted(violatedRulesPerPattern.items(), key=lambda item: len(item[1]), reverse=True))
-        #):
-        #    ruleValidityAverage = 0.0
-        #    for rule in violatedRulesPerPattern[patternString]:
-        #        ruleValidityAverage += ruleValidities[rule] / len(violatedRulesPerPattern[patternString])
-        #    matches = set(listFileMatches(patternString, [args.errorFile]))
-        #    for match in matches:
-        #        heatmap[match] += ruleValidityAverage
 
         with PdfPages(outputFilename) as pdf:
             iPage = 0
