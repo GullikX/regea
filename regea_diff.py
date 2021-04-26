@@ -413,7 +413,7 @@ def main():
                 nRulesValid = np.zeros(len(errorFileContentsWithMissing))
                 for iInsert in range(len(errorFileContentsWithMissing)):
                     errorFileContentsTemp = errorFileContentsWithMissing.copy()
-                    errorFileContents.insert(iInsert, lineToInsert)
+                    errorFileContentsTemp.insert(iInsert, lineToInsert)
                     errorPatternIndicesTemp = errorPatternIndices.copy()
                     errorPatternIndicesTemp.insert(iInsert, set([iPattern]))
 
