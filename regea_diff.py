@@ -346,9 +346,10 @@ def main():
         print(f"[{time.time() - timeStart:.3f}] Checking for violated rules...")
         orderingHeatmap = np.zeros(len(errorFileContents), dtype=np.float_)
         for iLine in range(len(errorFileContents)):  # TODO: parallelize (mpi reduce?)
-            for rule in [rule for rule in rules if rule.iPattern in errorPatternIndices[iLine]]:
+            rulesForPattern = [rule for rule in rules if rule.iPattern in errorPatternIndices[iLine] or rule.iPatternOther in errorPatternIndices[iLine]]
+            for rule in rulesForPattern:
                 if not rule.evaluate(errorPatternIndices):
-                    orderingHeatmap[iLine] += ruleValidities[rule]
+                    orderingHeatmap[iLine] += ruleValidities[rule] / len(rulesForPattern)
         orderingHeatmapMax = max(orderingHeatmap)
 
     # Check for unmatched lines TODO: parellelize
