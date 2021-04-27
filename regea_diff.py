@@ -121,6 +121,9 @@ class Rule:
             if self.iPatternOther in patternIndices[iLine]:
                 iPatternOtherMatches.add(iLine)
 
+        iPatternMatches = np.array(list(iPatternMatches))
+        iPatternOtherMatches = np.array(list(iPatternOtherMatches))
+
         if len(iPatternMatches) == 0 or len(iPatternOtherMatches) == 0:
             return False
 
@@ -137,16 +140,16 @@ class Rule:
             if not max(iPatternMatches) > max(iPatternOtherMatches):
                 return False
         elif self.type == RuleType.DIRECTLY_BEFORE:
-            return False  # TODO
             if len(iPatternOtherMatches) < len(iPatternMatches):
                 return False
             for iPatternMatch in iPatternMatches:
-                if not len(np.where(iPatternOtherMatches - iPatternMatch == 1)[0]):
+                if not len(np.where(iPatternMatch - iPatternOtherMatches == -1)[0]):
                     return False
         elif self.type == RuleType.DIRECTLY_AFTER:
-            return False  # TODO
+            if len(iPatternOtherMatches) < len(iPatternMatches):
+                return False
             for iPatternMatch in iPatternMatches:
-                if not len(np.where(iPatternOtherMatches - iPatternMatch == -1)[0]):
+                if not len(np.where(iPatternMatch - iPatternOtherMatches == 1)[0]):
                     return False
         else:
             raise NotImplementedError(f"Unknown rule type {RuleType(self.type).name}")
