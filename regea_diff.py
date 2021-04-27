@@ -194,7 +194,7 @@ def countStddevs(mean, stddev, value):
 
 def main():
     argParser = argparse.ArgumentParser(
-        description="Regea - Regular expression evolutionary algorithm log file analyzer (ordering checker)"
+        description="Regea - Regular expression evolutionary algorithm log file analyzer (diff generator)"
     )
     argParser.add_argument(f"--errorFile", type=str, metavar="ERRORFILE", required=True)  # TODO: allow multiple
     for arg in argsDefault:
