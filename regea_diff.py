@@ -393,7 +393,7 @@ def main():
         diffHeatmap[diffHeatmap == np.inf] = -np.inf
         diffHeatmap[diffHeatmap == -np.inf] = np.max(diffHeatmap)
         diffHeatmapMax = max(diffHeatmap)
-        assert np.isfinite(np.max(diffHeatmap))
+        assert np.isfinite(diffHeatmap).all()
 
         errorFileContentsWithMissing = errorFileContents.copy()
         diffHeatmapWithMissing = list(diffHeatmap.copy())
