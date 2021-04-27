@@ -108,7 +108,7 @@ class Rule:
         self.patternStringOther = patternStringList[self.iPatternOther]
         self.type = random.randint(0, len(RuleType) - 1)
 
-    def evaluate(self, patternIndices, iLineTarget=None):
+    def evaluate(self, patternIndices):
         if self.iPattern == self.iPatternOther:
             return False
 
@@ -120,10 +120,6 @@ class Rule:
                 iPatternMatches.add(iLine)
             if self.iPatternOther in patternIndices[iLine]:
                 iPatternOtherMatches.add(iLine)
-
-        if iLineTarget is not None:
-            assert iLineTarget in iPatternMatches, f"Rule '{self}' is invalid for line {iLine}"
-            iPatternMatches = set([iLineTarget])
 
         if len(iPatternMatches) == 0 or len(iPatternOtherMatches) == 0:
             return False
@@ -351,7 +347,7 @@ def main():
         orderingHeatmap = np.zeros(len(errorFileContents), dtype=np.float_)
         for iLine in range(len(errorFileContents)):  # TODO: parallelize (mpi reduce?)
             for rule in [rule for rule in rules if rule.iPattern in errorPatternIndices[iLine]]:
-                if not rule.evaluate(errorPatternIndices, iLineTarget=iLine):
+                if not rule.evaluate(errorPatternIndices):
                     orderingHeatmap[iLine] += ruleValidities[rule]
         orderingHeatmapMax = max(orderingHeatmap)
 
