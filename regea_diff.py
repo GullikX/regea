@@ -22,19 +22,18 @@
 import argparse
 import collections
 import enum
-from matplotlib.backends.backend_pdf import PdfPages
-import matplotlib.pyplot as plt
 from mpi4py import MPI
 import numpy as np
 import random
 import subprocess
 import sys
 import time
+import xml.etree.ElementTree as ET
 
 argsDefault = {
     "patternFilename": "regea.output.patterns",
-    "outputFilenameDiffSuffix": "diff.pdf",
-    "outputFilenameOrderingSuffix": "ordering.pdf",
+    "outputFilenameDiffSuffix": "diff.html",
+    "outputFilenameOrderingSuffix": "ordering.html",
     "iterationTimeLimit": 600.0,  # seconds
     "ruleValidityThreshold": 0.90,
 }
@@ -43,15 +42,13 @@ grepCmd = ["rg", "--no-config", "--no-multiline"]
 grepVersionCmd = grepCmd + ["--version"]
 grepListMatchesCmd = grepCmd + ["--no-filename", "--no-line-number", "--"]
 
-plt.rcParams.update({"font.family": "monospace"})
-
 a4size = (8.27, 11.69)  # inches
 fontSize = 8
 rowHeight = 0.019
 
-colorGreen = "#4CAF50"
-colorRed = "#F44336"
-colorAmber = "#FFC107"
+colorGreen = (76, 175, 80)
+colorRed = (244, 67, 54)
+colorAmber = (255, 193, 7)
 alphaMax = 0.8
 
 # OpenMPI parameters
@@ -189,6 +186,29 @@ def countStddevs(mean, stddev, value):
         return float("inf")
     else:
         return abs(value - mean) / stddev
+
+
+def exportHtmlFile(outputFilename, fileContents, heatmap, colorPositive, colorNegative):
+    assert len(fileContents) == len(heatmap)
+    heatmapMax = max(heatmap)
+
+    htmlNode = ET.Element("html")
+    bodyNode = ET.SubElement(htmlNode, "body")
+    for iLine in range(len(fileContents)):
+        if heatmap[iLine] >= 0:
+            alpha = alphaMax * heatmap[iLine] / heatmapMax
+            color = colorPositive + (alpha,)
+        else:
+            alpha = -alphaMax * heatmap[iLine] / heatmapMax
+            color = colorNegative + (alpha,)
+        paragraphNode = ET.SubElement(bodyNode, "div", style=f"background-color:rgba{color};")
+        codeNode = ET.SubElement(paragraphNode, "code")
+        codeNode.text = fileContents[iLine]
+
+    tree = ET.ElementTree(htmlNode)
+    ET.indent(tree)
+    with open(outputFilename, "wb") as f:
+        f.write(b"<!DOCTYPE html>\n" + ET.tostring(htmlNode))
 
 
 def main():
@@ -430,66 +450,11 @@ def main():
     if mpiRank == MpiNode.MASTER:
         outputFilenameOrdering = f"{args.errorFile}.{args.outputFilenameOrderingSuffix}"
         print(f"[{time.time() - timeStart:.3f}] Writing ordering deviations to '{outputFilenameOrdering}'...")
-
-        with PdfPages(outputFilenameOrdering) as pdf:
-            iPage = 0
-            pdfPage = plt.figure(figsize=a4size)
-            pdfPage.clf()
-            for iLine in range(len(errorFileContents)):
-                if iLine * rowHeight - iPage > 1.0:
-                    pdf.savefig()
-                    plt.close()
-                    pdfPage = plt.figure(figsize=a4size)
-                    pdfPage.clf()
-                    iPage += 1
-                text = pdfPage.text(
-                    0.01,
-                    1 - ((iLine + 1) * rowHeight - iPage),
-                    errorFileContents[iLine].replace("$", "\\$"),
-                    transform=pdfPage.transFigure,
-                    size=fontSize,
-                    ha="left",
-                )
-                alpha = alphaMax * orderingHeatmap[iLine] / orderingHeatmapMax
-                text.set_bbox(dict(facecolor=colorAmber, alpha=alpha, linewidth=0.0))
-            pdf.savefig()
-            plt.close()
+        exportHtmlFile(outputFilenameOrdering, errorFileContents, orderingHeatmap, colorAmber, None)
 
         outputFilenameDiff = f"{args.errorFile}.{args.outputFilenameDiffSuffix}"
         print(f"[{time.time() - timeStart:.3f}] Writing diff deviations to '{outputFilenameDiff}'...")
-        with PdfPages(outputFilenameDiff) as pdf:
-            iPage = 0
-            pdfPage = plt.figure(figsize=a4size)
-            pdfPage.clf()
-            for iLine in range(len(errorFileContentsWithMissing)):
-                if iLine * rowHeight - iPage > 1.0:
-                    pdf.savefig()
-                    plt.close()
-                    pdfPage = plt.figure(figsize=a4size)
-                    pdfPage.clf()
-                    iPage += 1
-                text = pdfPage.text(
-                    0.01,
-                    1 - ((iLine + 1) * rowHeight - iPage),
-                    errorFileContentsWithMissing[iLine].replace("$", "\\$"),
-                    transform=pdfPage.transFigure,
-                    size=fontSize,
-                    ha="left",
-                )
-                if diffHeatmapWithMissing[iLine] >= 0:
-                    alpha = (
-                        alphaMax
-                        * diffHeatmapWithMissing[iLine]
-                        / diffHeatmapMax
-                        / errorFileContentsCounter[errorFileContentsWithMissing[iLine]]
-                    )
-                    color = colorGreen
-                else:
-                    alpha = -alphaMax * diffHeatmapWithMissing[iLine] / diffHeatmapMax
-                    color = colorRed
-                text.set_bbox(dict(facecolor=color, alpha=alpha, linewidth=0.0))
-            pdf.savefig()
-            plt.close()
+        exportHtmlFile(outputFilenameDiff, errorFileContentsWithMissing, diffHeatmapWithMissing, colorGreen, colorRed)
 
         print(f"[{time.time() - timeStart:.3f}] Done.")
 
