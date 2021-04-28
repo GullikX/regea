@@ -55,7 +55,6 @@ colorAmber = "#FFC107"
 alphaMax = 0.8
 
 # OpenMPI parameters
-mpiSizeMin = 2  # Need at least two nodes for master-worker setup
 mpiComm = MPI.COMM_WORLD
 mpiSize = mpiComm.Get_size()
 mpiRank = mpiComm.Get_rank()
@@ -206,10 +205,6 @@ def main():
         )
     argParser.add_argument("referenceFiles", nargs="+", metavar="REFERENCEFILE")
     args = argParser.parse_args()
-
-    if mpiSize < mpiSizeMin:
-        print(f"Error: Needs at least {mpiSizeMin} mpi nodes (current mpiSize: {mpiSize})")
-        return 1
 
     try:
         subprocess.check_call(grepVersionCmd, stdout=subprocess.DEVNULL)
