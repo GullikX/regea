@@ -346,10 +346,14 @@ def main():
 
     # Generate ordering heatmap TODO: parallelize
     if mpiRank == MpiNode.MASTER:
-        print(f"[{time.time() - timeStart:.3f}] Checking for violated rules...")
+        print(f"[{time.time() - timeStart:.3f}] Checking for violated ordering rules...")
         orderingHeatmap = np.zeros(len(errorFileContents), dtype=np.float_)
         for iLine in range(len(errorFileContents)):  # TODO: parallelize (mpi reduce?)
-            rulesForPattern = [rule for rule in rules if rule.iPattern in errorPatternIndices[iLine] or rule.iPatternOther in errorPatternIndices[iLine]]
+            rulesForPattern = [
+                rule
+                for rule in rules
+                if rule.iPattern in errorPatternIndices[iLine] or rule.iPatternOther in errorPatternIndices[iLine]
+            ]
             for rule in rulesForPattern:
                 if not rule.evaluate(errorPatternIndices):
                     orderingHeatmap[iLine] += ruleValidities[rule] / len(rulesForPattern)
