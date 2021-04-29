@@ -36,20 +36,12 @@ Check `man mpiexec` for help on how to use OpenMPI. When parallelizing computati
 
 **Please run `dos2unix` (or equivalent) on all input files to make sure they are not corrupted.**
 
-### Checking for added/removed lines
-Check for log lines which have been added or removed for an error file `errorfile.log`:
+### Checking for disprepancies in an error file
+Check for log lines which have been added, removed or reordered in an error file `errorfile.log`:
 ```
 mpiexec python3 -m mpi4py ./regea_diff.py --errorFile errorfile.log referencefile1.log referencefile2.log ...
 ```
-This creates a file `errorfile.log.diff` which describes the difference between the file `errorfile.log` and an average reference file.
-
-### Checking for reordered lines
-Check for log lines which have been reordered for an error file `errorfile.log`:
-```
-mpiexec python3 -m mpi4py ./regea_ordering.py --errorFile errorfile.log referencefile1.log referencefile2.log ...
-```
-This creates a file `errorfile.log.ordering` which lists the detected differences in line ordering between the file `errorfile.log` and an average reference file.
-
+This creates the files `errorfile.log.diff.html` and `errorfile.log.ordering.html` which describes the differences between the file `errorfile.log` and an average reference file. The files can be viewed using any web browser. The `errorfile.log.diff.html` file shows lines which have been added or removed (green = added, red = removed) while the `errorfile.log.ordering.html` file shows lines which have been reordered (more yellow line = more reordered).
 
 ## Configuration
 
