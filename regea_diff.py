@@ -40,7 +40,7 @@ argsDefault = {
 }
 
 grepCmd = ["rg", "--no-config", "--pcre2", "--no-multiline"]
-grepVersionCmd = grepCmd + ["--version"]
+grepVersionCmd = grepCmd + ["--pcre2-version"]
 grepListMatchesCmd = grepCmd + ["--no-filename", "--no-line-number", "--"]
 
 a4size = (8.27, 11.69)  # inches

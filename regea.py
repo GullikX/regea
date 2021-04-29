@@ -57,7 +57,7 @@ argsDefault = {
 }
 
 grepCmd = ["rg", "--no-config", "--pcre2", "--no-multiline"]
-grepVersionCmd = grepCmd + ["--version"]
+grepVersionCmd = grepCmd + ["--pcre2-version"]
 grepCheckMatchCmd = grepCmd + ["--quiet", "--"]
 grepGetMatchingSubstringCmd = grepCmd + ["--only-matching", "--"]
 grepCountMatchesCmd = grepCmd + ["--count", "--no-filename", "--include-zero", "--"]
