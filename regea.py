@@ -855,6 +855,10 @@ def main():
             with open(args.inputFiles[iFile], "r") as f:
                 fileContents[iFile] = f.read().splitlines()
             fileContents[iFile] = list(filter(None, fileContents[iFile]))
+            for iLine in range(len(fileContents[iFile])):
+                assert fileContents[iFile][
+                    iLine
+                ].isprintable(), f"File '{args.inputFiles[iFile]}' contains non-printable character(s) at line {iLine}"
             random.shuffle(fileContents[iFile])
             nLines += len(fileContents[iFile])
 

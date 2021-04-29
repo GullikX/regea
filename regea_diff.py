@@ -247,6 +247,10 @@ def main():
     with open(args.errorFile, "r") as f:
         errorFileContents = f.read().splitlines()
     errorFileContents = list(filter(None, errorFileContents))
+    for iLine in range(len(errorFileContents)):
+        assert errorFileContents[
+            iLine
+        ].isprintable(), f"Error file '{args.errorFile}' contains non-printable character(s) at line {iLine}"
     errorFileContentsCounter = collections.Counter(errorFileContents)
 
     # Load reference files
@@ -256,6 +260,12 @@ def main():
         with open(args.referenceFiles[iFile], "r") as f:
             referenceFileContents[iFile] = f.read().splitlines()
         referenceFileContents[iFile] = list(filter(None, referenceFileContents[iFile]))
+        for iLine in range(len(referenceFileContents[iFile])):
+            assert referenceFileContents[iFile][
+                iLine
+            ].isprintable(), (
+                f"Reference file '{args.referenceFiles[iFile]}' contains non-printable character(s) at line {iLine}"
+            )
         referenceFileContentsCounter[iFile] = collections.Counter(referenceFileContents[iFile])
 
     inputFiles = [args.errorFile] + args.referenceFiles
