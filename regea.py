@@ -226,7 +226,12 @@ class Optional:
     returns = str
 
     def primitive(*args):
+        assert len(args) == Optional.arity
         return args[0] if args[0].endswith("?") else f"{args[0]}?"
+
+    def fitness(args):
+        assert len(args) == Optional.arity
+        return 0
 
 
 class Range:
@@ -435,6 +440,9 @@ class NonWordBoundary:
     def terminal():
         return "\\B"
 
+    def fitness():
+        return 1
+
 
 class WordBeginning:
     returns = str
@@ -472,6 +480,9 @@ class NonWordCharacter:
     def terminal():
         return "\\W"
 
+    def fitness():
+        return 1 / (len(string.printable) - (len(string.ascii_letters) + len(string.digits) + 1))
+
 
 class Whitespace:
     returns = str
@@ -479,12 +490,18 @@ class Whitespace:
     def terminal():
         return "\\s"
 
+    def fitness():
+        return 1 / len(string.whitespace)
+
 
 class NonWhitespace:
     returns = str
 
     def terminal():
         return "\\S"
+
+    def fitness():
+        return 1 / (len(string.printable) - len(string.whitespace))
 
 
 # Genetic programming algorithm
@@ -529,15 +546,43 @@ def generatePatternString(targetString, args):
 
     def evaluateIndividual(individual):
         patternString = toolbox.compile(individual)
+        if "\\b\\b" in patternString or "\\B\\B" in patternString:
+            return (0.0,)
+
         patternStringPadded = padPatternString(patternString, targetString)
         if patternStringPadded is None:
             return (0.0,)
 
-        fitness = 0.0
+        complexityFitness = 0.0
+        for iNode in range(len(individual)):
+            node = individual[iNode]
+            if isinstance(node, deap.gp.Primitive):
+                primitiveSubtree = deap.creator.Individual(individual[individual.searchSubtree(iNode)])
+
+                inputs = [None] * node.arity
+                iNodeArgument = 1
+                span = slice(0, 0)
+                for iInput in range(node.arity):
+                    span = primitiveSubtree.searchSubtree(iNodeArgument)
+                    inputs[iInput] = toolbox.compile(deap.creator.Individual(primitiveSubtree[span]))
+                    iNodeArgument = span.stop
+                assert span.stop == len(primitiveSubtree)
+
+                complexityFitness += primitives[node.name].fitness(inputs)
+            elif isinstance(node, deap.gp.Ephemeral):
+                complexityFitness += ephemeralConstants[node.__class__.__name__].fitness()
+            elif isinstance(node, deap.gp.Terminal):
+                complexityFitness += terminals[node.name].fitness()
+            else:
+                raise ValueError(f"Unknown node {node} of type {type(node)}")
+
+        matchFitness = 0.0
         fileMatches = countFileMatches(patternStringPadded, args.inputFiles)
         for iFile in range(len(args.inputFiles)):
             if fileMatches[iFile] > 0:
-                fitness += 1 / fileMatches[iFile] / len(args.inputFiles)
+                matchFitness += 1 / fileMatches[iFile] / len(args.inputFiles)
+
+        fitness = complexityFitness * matchFitness
 
         return (fitness,)
 
