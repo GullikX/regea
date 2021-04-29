@@ -28,6 +28,7 @@ import random
 import subprocess
 import sys
 import time
+import xml.dom.minidom
 import xml.etree.ElementTree as ET
 
 argsDefault = {
@@ -205,10 +206,9 @@ def exportHtmlFile(outputFilename, fileContents, heatmap, colorPositive, colorNe
         codeNode = ET.SubElement(paragraphNode, "code")
         codeNode.text = fileContents[iLine]
 
-    tree = ET.ElementTree(htmlNode)
-    ET.indent(tree)
-    with open(outputFilename, "wb") as f:
-        f.write(b"<!DOCTYPE html>\n" + ET.tostring(htmlNode))
+    xmlString = xml.dom.minidom.parseString(ET.tostring(htmlNode)).toprettyxml(indent=" " * 2)
+    with open(outputFilename, "w") as f:
+        f.write(f"<!DOCTYPE html>\n{xmlString}")
 
 
 def main():
