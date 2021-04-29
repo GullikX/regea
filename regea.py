@@ -183,12 +183,14 @@ class IdentityFloat:
     arity = len(argTypes)
     returns = float
 
-    def primitive(*args):
-        assert len(args) == IdentityFloat.arity
+    @classmethod
+    def primitive(cls, *args):
+        assert len(args) == cls.arity
         return args[0]
 
-    def fitness(args):
-        assert len(args) == IdentityFloat.arity
+    @classmethod
+    def fitness(cls, args):
+        assert len(args) == cls.arity
         return 0
 
 
@@ -197,12 +199,14 @@ class IdentityInt:
     arity = len(argTypes)
     returns = int
 
-    def primitive(*args):
-        assert len(args) == IdentityInt.arity
+    @classmethod
+    def primitive(cls, *args):
+        assert len(args) == cls.arity
         return args[0]
 
-    def fitness(args):
-        assert len(args) == IdentityInt.arity
+    @classmethod
+    def fitness(cls, args):
+        assert len(args) == cls.arity
         return 0
 
 
@@ -211,12 +215,14 @@ class Concatenate:
     arity = len(argTypes)
     returns = str
 
-    def primitive(*args):
-        assert len(args) == Concatenate.arity
+    @classmethod
+    def primitive(cls, *args):
+        assert len(args) == cls.arity
         return args[0] + args[1]
 
-    def fitness(args):
-        assert len(args) == Concatenate.arity
+    @classmethod
+    def fitness(cls, args):
+        assert len(args) == cls.arity
         return 0
 
 
@@ -225,12 +231,14 @@ class Optional:
     arity = len(argTypes)
     returns = str
 
-    def primitive(*args):
-        assert len(args) == Optional.arity
+    @classmethod
+    def primitive(cls, *args):
+        assert len(args) == cls.arity
         return args[0] if args[0].endswith("?") else f"{args[0]}?"
 
-    def fitness(args):
-        assert len(args) == Optional.arity
+    @classmethod
+    def fitness(cls, args):
+        assert len(args) == cls.arity
         return 0
 
 
@@ -239,14 +247,16 @@ class Range:
     arity = len(argTypes)
     returns = str
 
-    def primitive(*args):
-        assert len(args) == Range.arity
+    @classmethod
+    def primitive(cls, *args):
+        assert len(args) == cls.arity
         if args[0] == args[1]:
             return escape(chr(args[0]))
         return f"[{escape(chr(min(args[0], args[1])))}-{escape(chr(max(args[0], args[1])))}]"
 
-    def fitness(args):
-        assert len(args) == Range.arity
+    @classmethod
+    def fitness(cls, args):
+        assert len(args) == cls.arity
         return 1 / (abs(args[0] - args[1]) + 1)
 
 
@@ -255,14 +265,16 @@ class NegatedRange:
     arity = len(argTypes)
     returns = str
 
-    def primitive(*args):
-        assert len(args) == NegatedRange.arity
+    @classmethod
+    def primitive(cls, *args):
+        assert len(args) == cls.arity
         if args[0] == args[1]:
             return f"[^{escape(chr(args[0]))}]"
         return f"[^{escape(chr(min(args[0], args[1])))}-{escape(chr(max(args[0], args[1])))}]"
 
-    def fitness(args):
-        assert len(args) == NegatedRange.arity
+    @classmethod
+    def fitness(cls, args):
+        assert len(args) == cls.arity
         return 1 / (len(string.printable) - abs(args[0] - args[1]))
 
 
@@ -271,8 +283,9 @@ class Set:
     arity = len(argTypes)
     returns = str
 
-    def primitive(*args):
-        assert len(args) == Set.arity
+    @classmethod
+    def primitive(cls, *args):
+        assert len(args) == cls.arity
         charactersInSet = list(np.array(args) > 0.5)
         assert len(charactersInSet) == nAllowedCharacters
         nCharactersInSet = sum(charactersInSet)
@@ -284,8 +297,9 @@ class Set:
             characters = "".join([allowedCharacters[i] for i in range(nAllowedCharacters) if charactersInSet[i]])
             return f"[{characters}]"
 
-    def fitness(args):
-        assert len(args) == Set.arity
+    @classmethod
+    def fitness(cls, args):
+        assert len(args) == cls.arity
         try:
             return 1 / sum(args)
         except ZeroDivisionError:
@@ -297,8 +311,9 @@ class NegatedSet:
     arity = len(argTypes)
     returns = str
 
-    def primitive(*args):
-        assert len(args) == NegatedSet.arity
+    @classmethod
+    def primitive(cls, *args):
+        assert len(args) == cls.arity
         charactersInSet = list(np.array(args) > 0.5)
         assert len(charactersInSet) == nAllowedCharacters
         nCharactersInSet = sum(charactersInSet)
@@ -308,8 +323,9 @@ class NegatedSet:
             characters = "".join([allowedCharacters[i] for i in range(nAllowedCharacters) if charactersInSet[i]])
             return f"[^{characters}]"
 
-    def fitness(args):
-        assert len(args) == NegatedSet.arity
+    @classmethod
+    def fitness(cls, args):
+        assert len(args) == cls.arity
         try:
             return 1 / (nAllowedCharacters - sum(args))
         except ZeroDivisionError:
@@ -321,12 +337,14 @@ class PositiveLookahead:
     arity = len(argTypes)
     returns = str
 
-    def primitive(*args):
-        assert len(args) == PositiveLookahead.arity
+    @classmethod
+    def primitive(cls, *args):
+        assert len(args) == cls.arity
         return f"(?={args[0]})"
 
-    def fitness(args):
-        assert len(args) == PositiveLookahead.arity
+    @classmethod
+    def fitness(cls, args):
+        assert len(args) == cls.arity
         return 0
 
 
@@ -335,12 +353,14 @@ class PositiveLookbehind:
     arity = len(argTypes)
     returns = str
 
-    def primitive(*args):
-        assert len(args) == PositiveLookbehind.arity
+    @classmethod
+    def primitive(cls, *args):
+        assert len(args) == cls.arity
         return f"(?<={args[0]})"
 
-    def fitness(args):
-        assert len(args) == PositiveLookbehind.arity
+    @classmethod
+    def fitness(cls, args):
+        assert len(args) == cls.arity
         return 0
 
 
@@ -349,12 +369,14 @@ class NegativeLookahead:
     arity = len(argTypes)
     returns = str
 
-    def primitive(*args):
-        assert len(args) == NegativeLookahead.arity
+    @classmethod
+    def primitive(cls, *args):
+        assert len(args) == cls.arity
         return f"(?!{args[0]})"
 
-    def fitness(args):
-        assert len(args) == NegativeLookahead.arity
+    @classmethod
+    def fitness(cls, args):
+        assert len(args) == cls.arity
         return 0
 
 
@@ -363,12 +385,14 @@ class NegativeLookbehind:
     arity = len(argTypes)
     returns = str
 
-    def primitive(*args):
-        assert len(args) == NegativeLookbehind.arity
+    @classmethod
+    def primitive(cls, *args):
+        assert len(args) == cls.arity
         return f"(?<!{args[0]})"
 
-    def fitness(args):
-        assert len(args) == NegativeLookbehind.arity
+    @classmethod
+    def fitness(cls, args):
+        assert len(args) == cls.arity
         return 0
 
 
