@@ -454,11 +454,15 @@ def main():
         diffHeatmapWithMissing = list(diffHeatmap.copy())
         for iPattern in range(len(patternStringList)):
             if frequencyStddevs[iPattern] == 0 and errorFrequencies[iPattern] < frequencyMeans[iPattern]:
-                for lineToInsert in matchedLinesPerPattern[patternStringList[iPattern]]:
-                    if lineToInsert not in errorFileContentsCounter:
-                        break
-                else:
+                lineToInsertCandidates = [
+                    line
+                    for line in matchedLinesPerPattern[patternStringList[iPattern]]
+                    if line not in errorFileContentsCounter
+                ]
+                if len(lineToInsertCandidates) == 0:
                     continue
+                lineToInsert = random.choice(lineToInsertCandidates)
+
                 rulesForPattern = [
                     rule for rule in rules if rule.iPattern == iPattern or rule.iPatternOther == iPattern
                 ]
