@@ -46,3 +46,15 @@ This creates the files `errorfile.log.diff.html` and `errorfile.log.ordering.htm
 ## Configuration
 
 Parameters for each python file can be listed using the `--help` option.
+
+For convenience, command line parameters can also be specified in json-formatted config files. Specify a config file to be used using the `REGEA_CONFIG` or `REGEA_DIFF_CONFIG` environment variables. If a parameter is specified in both the given config file and on the command line, the argument specified on the command line takes precedence.
+
+```
+$ cat regea_config.json
+{
+    "outputFilename": "customOutputName",
+    "populationSize": 10
+}
+$ REGEA_CONFIG="regea_config.json" mpiexec python3 -m mpi4py ./regea.py referencefile1.log referencefile2.log
+(running regea with output filename 'customOutputName' and population size 10...)
+```

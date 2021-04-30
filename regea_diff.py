@@ -22,8 +22,10 @@
 import argparse
 import collections
 import enum
+import json
 from mpi4py import MPI
 import numpy as np
+import os
 import random
 import subprocess
 import sys
@@ -38,6 +40,8 @@ argsDefault = {
     "iterationTimeLimit": 600.0,  # seconds
     "ruleValidityThreshold": 0.90,
 }
+
+configFileEnvVar = "REGEA_DIFF_CONFIG"
 
 grepCmd = ["rg", "--no-config", "--pcre2", "--no-multiline"]
 grepVersionCmd = grepCmd + ["--pcre2-version"]
@@ -212,16 +216,35 @@ def exportHtmlFile(outputFilename, fileContents, heatmap, colorPositive, colorNe
 
 
 def main():
+    # Load values from config file if specified
+    if mpiRank == MpiNode.MASTER:
+        argsDefaultWithConfig = argsDefault.copy()
+        if configFileEnvVar in os.environ and os.environ[configFileEnvVar]:
+            with open(os.environ[configFileEnvVar], "r") as f:
+                configFile = json.load(f)
+            for key, value in configFile.items():
+                assert (
+                    key in argsDefault
+                ), f"Config file '{os.environ[configFileEnvVar]}' contains unexpected key '{key}'"
+                assert (
+                    type(value) != dict
+                ), f"Config file '{os.environ[configFileEnvVar]}' contains nested value(s) '{value}' for key '{key}' which is not allowed"
+                argsDefaultWithConfig[key] = type(argsDefault[key])(configFile[key])
+    else:
+        argsDefaultWithConfig = None
+    argsDefaultWithConfig = mpiComm.bcast(argsDefaultWithConfig, root=MpiNode.MASTER)
+
+    # Parse command line arguments
     argParser = argparse.ArgumentParser(
         description="Regea - Regular expression evolutionary algorithm log file analyzer (diff generator)"
     )
     argParser.add_argument(f"--errorFile", type=str, metavar="ERRORFILE", required=True)  # TODO: allow multiple
-    for arg in argsDefault:
+    for arg in argsDefaultWithConfig:
         argParser.add_argument(
             f"--{arg}",
-            default=argsDefault[arg],
-            type=type(argsDefault[arg]),
-            metavar=type(argsDefault[arg]).__name__.upper(),
+            default=argsDefaultWithConfig[arg],
+            type=type(argsDefaultWithConfig[arg]),
+            metavar=type(argsDefaultWithConfig[arg]).__name__.upper(),
         )
     argParser.add_argument("referenceFiles", nargs="+", metavar="REFERENCEFILE")
     args = argParser.parse_args()
