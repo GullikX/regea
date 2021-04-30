@@ -39,7 +39,7 @@ import subprocess
 import sys
 import time
 
-argsDefault = {
+argsDefault = {  # TODO: update values
     "outputFilename": "regea.output.patterns",
     "populationSize": 50,
     "evolutionTimeout": 60.0,  # seconds
