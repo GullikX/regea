@@ -101,6 +101,11 @@ class Stream(enum.IntEnum):
     STDERR = 1
 
 
+# Classes
+class AsciiCode(int):
+    pass
+
+
 # Util functions
 def argmin(iterable):
     return min(range(len(iterable)), key=iterable.__getitem__)
@@ -182,10 +187,10 @@ nAllowedCharacters = len(allowedCharacters)
 
 
 # Genetic programming primitives
-class IdentityFloat:
-    argTypes = (float,)
+class IdentityBool:
+    argTypes = (bool,)
     arity = len(argTypes)
-    returns = float
+    returns = bool
 
     @classmethod
     def primitive(cls, *args):
@@ -198,10 +203,10 @@ class IdentityFloat:
         return 0
 
 
-class IdentityInt:
-    argTypes = (int,)
+class IdentityAsciiCode:
+    argTypes = (AsciiCode,)
     arity = len(argTypes)
-    returns = int
+    returns = AsciiCode
 
     @classmethod
     def primitive(cls, *args):
@@ -247,7 +252,7 @@ class Optional:
 
 
 class Range:
-    argTypes = (int, int)
+    argTypes = (AsciiCode, AsciiCode)
     arity = len(argTypes)
     returns = str
 
@@ -265,7 +270,7 @@ class Range:
 
 
 class NegatedRange:
-    argTypes = (int, int)
+    argTypes = (AsciiCode, AsciiCode)
     arity = len(argTypes)
     returns = str
 
@@ -283,22 +288,20 @@ class NegatedRange:
 
 
 class Set:
-    argTypes = (float,) * nAllowedCharacters  # TODO: bool input
+    argTypes = (bool,) * nAllowedCharacters
     arity = len(argTypes)
     returns = str
 
     @classmethod
     def primitive(cls, *args):
         assert len(args) == cls.arity
-        charactersInSet = list(np.array(args) > 0.5)
-        assert len(charactersInSet) == nAllowedCharacters
-        nCharactersInSet = sum(charactersInSet)
+        nCharactersInSet = sum(args)
         if nCharactersInSet == 0:
             return ""
         elif nCharactersInSet == 1:
-            return allowedCharacters[argmax(charactersInSet)]
+            return allowedCharacters[argmax(args)]
         else:
-            characters = "".join([allowedCharacters[i] for i in range(nAllowedCharacters) if charactersInSet[i]])
+            characters = "".join([allowedCharacters[i] for i in range(nAllowedCharacters) if args[i]])
             return f"[{characters}]"
 
     @classmethod
@@ -311,20 +314,18 @@ class Set:
 
 
 class NegatedSet:
-    argTypes = (float,) * nAllowedCharacters  # TODO: bool input
+    argTypes = (bool,) * nAllowedCharacters
     arity = len(argTypes)
     returns = str
 
     @classmethod
     def primitive(cls, *args):
         assert len(args) == cls.arity
-        charactersInSet = list(np.array(args) > 0.5)
-        assert len(charactersInSet) == nAllowedCharacters
-        nCharactersInSet = sum(charactersInSet)
+        nCharactersInSet = sum(args)
         if nCharactersInSet == 0:
             return ""
         else:
-            characters = "".join([allowedCharacters[i] for i in range(nAllowedCharacters) if charactersInSet[i]])
+            characters = "".join([allowedCharacters[i] for i in range(nAllowedCharacters) if args[i]])
             return f"[^{characters}]"
 
     @classmethod
@@ -402,7 +403,7 @@ class NegativeLookbehind:
 
 # Genetic programming ephemeral constants
 class RandomPrintableAsciiCode:
-    returns = int
+    returns = AsciiCode
 
     def ephemeralConstant():
         return random.randint(printableAsciiMin, printableAsciiMax)
@@ -421,11 +422,11 @@ class RandomCharacter:
         return 1
 
 
-class RandomFloat:
-    returns = float
+class RandomBool:
+    returns = bool
 
     def ephemeralConstant():
-        return random.random()
+        return random.choice([True, False])
 
     def fitness():
         return 0
@@ -539,8 +540,8 @@ def generatePatternString(targetString, args):
     global toolbox
 
     primitives = {
-        IdentityFloat.__name__: IdentityFloat,
-        IdentityInt.__name__: IdentityInt,
+        IdentityBool.__name__: IdentityBool,
+        IdentityAsciiCode.__name__: IdentityAsciiCode,
         Concatenate.__name__: Concatenate,
         Optional.__name__: Optional,
         Range.__name__: Range,
@@ -556,7 +557,7 @@ def generatePatternString(targetString, args):
     ephemeralConstants = {
         RandomPrintableAsciiCode.__name__: RandomPrintableAsciiCode,
         RandomCharacter.__name__: RandomCharacter,
-        RandomFloat.__name__: RandomFloat,
+        RandomBool.__name__: RandomBool,
     }
 
     terminals = {
@@ -693,7 +694,7 @@ def generatePatternString(targetString, args):
     # Replace some wildcards with full ranges
     primitiveRange = [primitive for primitive in psetMutate.primitives[str] if primitive.name == Range.__name__][0]
     ephemeralRandomPrintableAsciiCode = [
-        terminal for terminal in psetMutate.terminals[int] if terminal == deap.gp.RandomPrintableAsciiCode
+        terminal for terminal in psetMutate.terminals[AsciiCode] if terminal == deap.gp.RandomPrintableAsciiCode
     ][0]
 
     for iIndividual in range(1, len(population)):
