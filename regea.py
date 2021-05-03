@@ -953,10 +953,7 @@ def main():
                 print(
                     f"[{time.time() - timeStart:.3f}] Progress: {100 * (iLine) / nLines:.2f}% ({(iLine + 1)}/{nLines})"
                 )
-            else:
-                print(
-                    f"[{time.time() - timeStart:.3f}] Waiting for {nWorkerNodes - sum(iNodesFinished)} worker nodes to finish..."  # TODO: count correctly
-                )
+
             try:
                 targetString = fileContentsConcatenated[iLine]
             except IndexError:
@@ -976,6 +973,10 @@ def main():
                     iNodesFinished[status.source - 1] = True
                     if sum(iNodesFinished) == nWorkerNodes:
                         break
+                    else:
+                        print(
+                            f"[{time.time() - timeStart:.3f}] Waiting for {nWorkerNodes - sum(iNodesFinished)} worker nodes to finish..."
+                        )
                 else:
                     if args.verbose:
                         print(f"[{time.time() - timeStart:.3f}] Generated pattern: '{patternString}'")
