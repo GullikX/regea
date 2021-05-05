@@ -26,7 +26,7 @@ python3 -m pip install -r requirements.txt
 
 ### Data preprocessing
 
-This section assumes a log file `output.log` which contains a series of test cases, some successful and some some failed.
+This section assumes a log file `output.log` which contains a series of test cases, some successful and some failed.
 
 Make sure that the log file is well-formatted:
 ```
@@ -79,7 +79,7 @@ $ tree .
 Alright, we are now ready to start analyzing the files.
 
 
-### Learning the structure of reference files
+### Learning the structure of the reference files
 
 The first step is letting Regea learn the usual structure of the log files by training on the reference files. The command is:
 ```
@@ -101,7 +101,7 @@ This creates the files `$errorFile.diff.html` and `$errorFile.ordering.html` whi
 
 Parameters for each python file can be listed using the `--help` option.
 
-For convenience, command line parameters can also be specified in json-formatted config files. Specify a config file to be used using the `REGEA_CONFIG` or `REGEA_DIFF_CONFIG` environment variables. If a parameter is specified in both the given config file and on the command line, the argument specified on the command line takes precedence.
+For convenience, command line parameters can also be specified in json-formatted config files. Specify a config file to be used using the `REGEA_CONFIG` (for `regea.py`) or `REGEA_DIFF_CONFIG` (for `regea_diff.py`) environment variables. If a parameter is specified in both the given config file and on the command line, the argument specified on the command line takes precedence. Example:
 
 ```
 $ cat regea_config.json
