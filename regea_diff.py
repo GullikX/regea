@@ -243,6 +243,7 @@ def main():
         description="Regea - Regular expression evolutionary algorithm log file analyzer (diff generator)"
     )
     argParser.add_argument(f"--errorFile", type=str, metavar="ERRORFILE", required=True)  # TODO: allow multiple
+    argParser.add_argument("--verbose", action="store_true")
     for arg in argsDefaultWithConfig:
         argParser.add_argument(
             f"--{arg}",
@@ -408,6 +409,7 @@ def main():
 
     # Generate ordering heatmap TODO: parallelize
     if mpiRank == MpiNode.MASTER:
+        print(f"[{time.time() - timeStart:.3f}] Generated a total of {len(rules)} valid ordering rules.")
         print(f"[{time.time() - timeStart:.3f}] Checking for violated ordering rules...")
         orderingHeatmap = np.zeros(len(errorFileContents), dtype=np.float_)
         for iLine in range(len(errorFileContents)):  # TODO: parallelize (mpi reduce?)
@@ -484,6 +486,7 @@ def main():
     nLinesToInsert = len(linesToInsert)
 
     if mpiRank == MpiNode.MASTER:
+        print(f"[{time.time() - timeStart:.3f}] Re-adding {nLinesToInsert} removed lines to the error file...")
         iLinesToInsert = np.linspace(0, nLinesToInsert - 1, nLinesToInsert, dtype=np.int_)
     else:
         iLinesToInsert = None
@@ -519,6 +522,8 @@ def main():
                 if rule.evaluate(errorPatternIndicesTemp, iLineTarget=iInsert):
                     nRulesValid[iInsert] += 1
         insertPositionsLocal[iLinesToInsertLocal[i]] = nRulesValid.argmax()
+        if args.verbose:
+            print(f"[{time.time() - timeStart:.3f}] Adding line '{lineToInsert}' at position {insertPositionsLocal[iLinesToInsertLocal[i]]}...")
 
     mpiComm.Barrier()
     mpiComm.Reduce(insertPositionsLocal, insertPositions, op=MPI.MAX, root=0)
