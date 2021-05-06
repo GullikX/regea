@@ -521,7 +521,9 @@ def main():
                     nRulesValid[iInsert] += 1
         insertPositionsLocal[iLinesToInsertLocal[i]] = nRulesValid.argmax()
         if args.verbose:
-            print(f"[{time.time() - timeStart:.3f}] Adding line '{lineToInsert}' at position {insertPositionsLocal[iLinesToInsertLocal[i]]}...")
+            print(
+                f"[{time.time() - timeStart:.3f}] Adding line '{lineToInsert}' at position {insertPositionsLocal[iLinesToInsertLocal[i]]}..."
+            )
 
     mpiComm.Barrier()
     mpiComm.Reduce(insertPositionsLocal, insertPositions, op=MPI.MAX, root=0)
