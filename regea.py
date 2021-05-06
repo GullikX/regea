@@ -369,36 +369,36 @@ class PositiveLookbehind:
         return 0
 
 
-class NegativeLookahead:
-    argTypes = (str,)
-    arity = len(argTypes)
-    returns = str
+# class NegativeLookahead:
+#    argTypes = (str,)
+#    arity = len(argTypes)
+#    returns = str
+#
+#    @classmethod
+#    def primitive(cls, *args):
+#        assert len(args) == cls.arity
+#        return f"(?!{args[0]})"
+#
+#    @classmethod
+#    def fitness(cls, args):
+#        assert len(args) == cls.arity
+#        return 0
 
-    @classmethod
-    def primitive(cls, *args):
-        assert len(args) == cls.arity
-        return f"(?!{args[0]})"
 
-    @classmethod
-    def fitness(cls, args):
-        assert len(args) == cls.arity
-        return 0
-
-
-class NegativeLookbehind:
-    argTypes = (str,)
-    arity = len(argTypes)
-    returns = str
-
-    @classmethod
-    def primitive(cls, *args):
-        assert len(args) == cls.arity
-        return f"(?<!{args[0]})"
-
-    @classmethod
-    def fitness(cls, args):
-        assert len(args) == cls.arity
-        return 0
+# class NegativeLookbehind:
+#    argTypes = (str,)
+#    arity = len(argTypes)
+#    returns = str
+#
+#    @classmethod
+#    def primitive(cls, *args):
+#        assert len(args) == cls.arity
+#        return f"(?<!{args[0]})"
+#
+#    @classmethod
+#    def fitness(cls, args):
+#        assert len(args) == cls.arity
+#        return 0
 
 
 # Genetic programming ephemeral constants
@@ -550,8 +550,8 @@ def generatePatternString(targetString, args):
         NegatedSet.__name__: NegatedSet,
         PositiveLookahead.__name__: PositiveLookahead,
         PositiveLookbehind.__name__: PositiveLookbehind,
-        NegativeLookahead.__name__: NegativeLookahead,
-        NegativeLookbehind.__name__: NegativeLookbehind,
+        # NegativeLookahead.__name__: NegativeLookahead,
+        # NegativeLookbehind.__name__: NegativeLookbehind,
     }
 
     ephemeralConstants = {
