@@ -132,17 +132,21 @@ class Rule:
             return False
 
         if self.type == RuleType.BEFORE_ALL:
-            if not max(iPatternMatches) < min(iPatternOtherMatches):
-                return False
+            for iPatternMatch in iPatternMatches:
+                if not iPatternMatch < min(iPatternOtherMatches):
+                    return False
         elif self.type == RuleType.AFTER_ALL:
-            if not min(iPatternMatches) > max(iPatternOtherMatches):
-                return False
+            for iPatternMatch in iPatternMatches:
+                if not iPatternMatch > max(iPatternOtherMatches):
+                    return False
         elif self.type == RuleType.BEFORE_ANY:
-            if not min(iPatternMatches) < min(iPatternOtherMatches):
-                return False
+            for iPatternMatch in iPatternMatches:
+                if not iPatternMatch < max(iPatternOtherMatches):
+                    return False
         elif self.type == RuleType.AFTER_ANY:
-            if not max(iPatternMatches) > max(iPatternOtherMatches):
-                return False
+            for iPatternMatch in iPatternMatches:
+                if not iPatternMatch > min(iPatternOtherMatches):
+                    return False
         elif self.type == RuleType.DIRECTLY_BEFORE:
             if len(iPatternOtherMatches) < len(iPatternMatches):
                 return False
