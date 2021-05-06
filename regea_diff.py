@@ -341,25 +341,35 @@ def main():
         mpiComm.send(matchedLinesPerPattern, dest=MpiNode.MASTER, tag=MpiTag.MATCHED_LINES_PER_PATTERN)
     matchedLinesPerPattern = mpiComm.bcast(matchedLinesPerPattern, root=MpiNode.MASTER)
 
-    if mpiRank == MpiNode.MASTER:  # TODO: fix time complexity + parallelize
+    if mpiRank == MpiNode.MASTER:  # TODO: Parallelize
+        patternIndices = {}
+        for iPattern in range(len(patternStringList)):
+            for iLine in range(len(errorFileContents)):
+                if errorFileContents[iLine] not in patternIndices:
+                    patternIndices[errorFileContents[iLine]] = set()
+                if errorFileContents[iLine] in matchedLinesPerPattern[patternStringList[iPattern]]:
+                    patternIndices[errorFileContents[iLine]].add(iPattern)
+            for iFile in range(len(args.referenceFiles)):
+                for iLine in range(len(referenceFileContents[iFile])):
+                    if referenceFileContents[iFile][iLine] not in patternIndices:
+                        patternIndices[referenceFileContents[iFile][iLine]] = set()
+                    if referenceFileContents[iFile][iLine] in matchedLinesPerPattern[patternStringList[iPattern]]:
+                        patternIndices[referenceFileContents[iFile][iLine]].add(iPattern)
+
         errorPatternIndices = [None] * len(errorFileContents)
         for iLine in range(len(errorFileContents)):
-            errorPatternIndices[iLine] = set()
-            for iPattern in range(len(patternStringList)):
-                if errorFileContents[iLine] in matchedLinesPerPattern[patternStringList[iPattern]]:
-                    errorPatternIndices[iLine].add(iPattern)
+            errorPatternIndices[iLine] = patternIndices[errorFileContents[iLine]]
 
         referencePatternIndices = [None] * len(args.referenceFiles)
         for iFile in range(len(args.referenceFiles)):
             referencePatternIndices[iFile] = [None] * len(referenceFileContents[iFile])
             for iLine in range(len(referenceFileContents[iFile])):
-                referencePatternIndices[iFile][iLine] = set()
-                for iPattern in range(len(patternStringList)):
-                    if referenceFileContents[iFile][iLine] in matchedLinesPerPattern[patternStringList[iPattern]]:
-                        referencePatternIndices[iFile][iLine].add(iPattern)
+                referencePatternIndices[iFile][iLine] = patternIndices[referenceFileContents[iFile][iLine]]
     else:
+        patternIndices = None
         errorPatternIndices = None
         referencePatternIndices = None
+    patternIndices = mpiComm.bcast(patternIndices, root=MpiNode.MASTER)
     errorPatternIndices = mpiComm.bcast(errorPatternIndices, root=MpiNode.MASTER)
     referencePatternIndices = mpiComm.bcast(referencePatternIndices, root=MpiNode.MASTER)
 
@@ -433,6 +443,7 @@ def main():
 
     # Generate diff heatmap TODO: parellelize
     if mpiRank == MpiNode.MASTER:
+        print(f"[{time.time() - timeStart:.3f}] Checking for added lines...")
         diffHeatmap = np.zeros(len(errorFileContents), dtype=np.float_)
         for iLine in range(len(errorFileContents)):
             iPatterns = errorPatternIndices[iLine]
@@ -447,11 +458,15 @@ def main():
 
         diffHeatmap[diffHeatmap == np.inf] = -np.inf
         diffHeatmap[diffHeatmap == -np.inf] = np.max(diffHeatmap)
-        diffHeatmapMax = max(diffHeatmap)
         assert np.isfinite(diffHeatmap).all()
+    else:
+        diffHeatmap = None
+    diffHeatmap = mpiComm.bcast(diffHeatmap, root=MpiNode.MASTER)
+    diffHeatmapMax = max(diffHeatmap)
 
-        errorFileContentsWithMissing = errorFileContents.copy()
-        diffHeatmapWithMissing = list(diffHeatmap.copy())
+    if mpiRank == MpiNode.MASTER:  # TODO: parallelize
+        print(f"[{time.time() - timeStart:.3f}] Checking for removed lines...")
+        linesToInsert = []
         for iPattern in range(len(patternStringList)):
             if frequencyStddevs[iPattern] == 0 and errorFrequencies[iPattern] < frequencyMeans[iPattern]:
                 lineToInsertCandidates = [
@@ -461,25 +476,65 @@ def main():
                 ]
                 if len(lineToInsertCandidates) == 0:
                     continue
-                lineToInsert = random.choice(lineToInsertCandidates)
+                linesToInsert.append(random.choice(lineToInsertCandidates))
+        linesToInsert = list(set(linesToInsert))
+    else:
+        linesToInsert = None
+    linesToInsert = mpiComm.bcast(linesToInsert, root=MpiNode.MASTER)
+    nLinesToInsert = len(linesToInsert)
 
-                rulesForPattern = [rule for rule in rules if rule.iPattern == iPattern]
-                nRulesValid = np.zeros(len(errorFileContentsWithMissing))
-                for iInsert in range(len(errorFileContentsWithMissing)):
-                    errorFileContentsTemp = errorFileContentsWithMissing.copy()
-                    errorFileContentsTemp.insert(iInsert, lineToInsert)
-                    errorPatternIndicesTemp = errorPatternIndices.copy()
-                    errorPatternIndicesTemp.insert(iInsert, set([iPattern]))
+    if mpiRank == MpiNode.MASTER:
+        iLinesToInsert = np.linspace(0, nLinesToInsert - 1, nLinesToInsert, dtype=np.int_)
+    else:
+        iLinesToInsert = None
 
-                    for rule in rulesForPattern:
-                        if rule.evaluate(errorPatternIndicesTemp, iLineTarget=iInsert):
-                            nRulesValid[iInsert] += 1
-                iInsertBest = nRulesValid.argmax()
-                errorFileContentsWithMissing.insert(iInsertBest, lineToInsert)
-                diffHeatmapWithMissing.insert(iInsertBest, -diffHeatmapMax)
-                # print(f"[{time.time() - timeStart:.3f}] Added line '{lineToInsert}' at position {iInsertBest}")
+    nLinesToInsertLocal = np.array([nLinesToInsert // mpiSize] * mpiSize, dtype=np.int_)
+    nLinesToInsertLocal[: (nLinesToInsert % mpiSize)] += 1
+    iLinesToInsertLocal = np.zeros(nLinesToInsertLocal[mpiRank], dtype=np.int_)
 
-            assert len(errorFileContentsWithMissing) == len(diffHeatmapWithMissing)
+    displacement = [0] * mpiSize
+    for iNode in range(1, mpiSize):
+        displacement[iNode] = displacement[iNode - 1] + nLinesToInsertLocal[iNode - 1]
+
+    mpiComm.Scatterv(
+        (iLinesToInsert, nLinesToInsertLocal, displacement, mpiTypeMap[iLinesToInsertLocal.dtype]),
+        iLinesToInsertLocal,
+        root=MpiNode.MASTER,
+    )
+    mpiComm.Barrier()
+
+    insertPositionsLocal = -np.ones(nLinesToInsert, dtype=np.int_)
+    insertPositions = -np.ones(nLinesToInsert, dtype=np.int_)
+    for i in range(nLinesToInsertLocal[mpiRank]):
+        lineToInsert = linesToInsert[iLinesToInsertLocal[i]]
+        rulesForLine = [rule for rule in rules if rule.iPattern in patternIndices[lineToInsert]]
+        nRulesValid = np.zeros(len(errorFileContents), dtype=np.int_)
+        for iInsert in range(len(errorFileContents)):
+            errorFileContentsTemp = errorFileContents.copy()
+            errorFileContentsTemp.insert(iInsert, lineToInsert)
+            errorPatternIndicesTemp = errorPatternIndices.copy()
+            errorPatternIndicesTemp.insert(iInsert, patternIndices[lineToInsert])
+
+            for rule in rulesForLine:
+                if rule.evaluate(errorPatternIndicesTemp, iLineTarget=iInsert):
+                    nRulesValid[iInsert] += 1
+        insertPositionsLocal[iLinesToInsertLocal[i]] = nRulesValid.argmax()
+
+    mpiComm.Barrier()
+    mpiComm.Reduce(insertPositionsLocal, insertPositions, op=MPI.MAX, root=0)
+
+    if mpiRank == MpiNode.MASTER:
+        assert (insertPositions >= 0).all()
+        insertionMap = dict(zip(linesToInsert, insertPositions))
+        insertionMap = dict(sorted(insertionMap.items(), key=lambda item: item[1], reverse=True))
+
+        errorFileContentsWithMissing = errorFileContents.copy()
+        diffHeatmapWithMissing = list(diffHeatmap.copy())
+
+        for line, insertPosition in insertionMap.items():  # Items are inserted in reverse order to not mess up indices
+            errorFileContentsWithMissing.insert(insertPosition, line)
+            diffHeatmapWithMissing.insert(insertPosition, -diffHeatmapMax)
+        assert len(errorFileContentsWithMissing) == len(diffHeatmapWithMissing)
 
     # Write results to disk
     if mpiRank == MpiNode.MASTER:
