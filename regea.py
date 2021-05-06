@@ -460,7 +460,7 @@ class WordBoundary:
         return "\\b"
 
     def fitness():
-        return 1
+        return 0.5
 
 
 class NonWordBoundary:
