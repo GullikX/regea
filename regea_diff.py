@@ -82,8 +82,7 @@ class MpiNode(enum.IntEnum):
 class MpiTag(enum.IntEnum):
     RULES = 0
     RULES_PER_PATTERN = 1
-    RULE_VALIDITIES = 2
-    MATCHED_LINES_PER_PATTERN = 3
+    MATCHED_LINES_PER_PATTERN = 2
 
 
 class Stream(enum.IntEnum):
@@ -192,7 +191,7 @@ def countStddevs(mean, stddev, value):
     if value == mean:
         return 0.0
     if stddev == 0.0:
-        return float("inf")
+        return np.inf
     else:
         return abs(value - mean) / stddev
 
@@ -205,10 +204,10 @@ def exportHtmlFile(outputFilename, fileContents, heatmap, colorPositive, colorNe
     bodyNode = ET.SubElement(htmlNode, "body")
     for iLine in range(len(fileContents)):
         if heatmap[iLine] >= 0:
-            alpha = alphaMax * heatmap[iLine] / heatmapMax
+            alpha = alphaMax * heatmap[iLine] / heatmapMax if heatmapMax > 0.0 else 0.0
             color = colorPositive + (alpha,)
         else:
-            alpha = -alphaMax * heatmap[iLine] / heatmapMax
+            alpha = -alphaMax * heatmap[iLine] / heatmapMax if heatmapMax > 0.0 else 0.0
             color = colorNegative + (alpha,)
         paragraphNode = ET.SubElement(bodyNode, "div", style=f"background-color:rgba{color};")
         codeNode = ET.SubElement(paragraphNode, "code")
@@ -377,35 +376,30 @@ def main():
     # Generate ordering rules
     if mpiRank == MpiNode.MASTER:
         print(f"[{time.time() - timeStart:.3f}] Generating ordering rules for {args.iterationTimeLimit} seconds...")
-    rules = set()
-    ruleValidities = {}
+    rules = {}
     timeIterationStart = time.time()
 
     while time.time() - timeIterationStart < args.iterationTimeLimit:
         rule = Rule(patternStringList)
         if rule in rules:
             continue
-        ruleValidities[rule] = 1.0
+        ruleValidity = 1.0
         for iFile in range(len(args.referenceFiles)):
             if not rule.evaluate(referencePatternIndices[iFile]):
-                ruleValidities[rule] -= 1.0 / len(args.referenceFiles)
-                if ruleValidities[rule] < args.ruleValidityThreshold:
-                    del ruleValidities[rule]
+                ruleValidity -= 1.0 / len(args.referenceFiles)
+                if ruleValidity < args.ruleValidityThreshold:
                     break
         else:
-            rules.add(rule)
+            rules[rule] = ruleValidity
 
     mpiComm.Barrier()
     if mpiRank == MpiNode.MASTER:
         print(f"[{time.time() - timeStart:.3f}] Gathering ordering rules...")
         for iNode in range(1, mpiSize):
             rules.update(mpiComm.recv(source=iNode, tag=MpiTag.RULES))
-            ruleValidities.update(mpiComm.recv(source=iNode, tag=MpiTag.RULE_VALIDITIES))
     else:
         mpiComm.send(rules, dest=MpiNode.MASTER, tag=MpiTag.RULES)
-        mpiComm.send(ruleValidities, dest=MpiNode.MASTER, tag=MpiTag.RULE_VALIDITIES)
     rules = mpiComm.bcast(rules, root=MpiNode.MASTER)
-    ruleValidities = mpiComm.bcast(ruleValidities, root=MpiNode.MASTER)
 
     # Generate ordering heatmap TODO: parallelize
     if mpiRank == MpiNode.MASTER:
@@ -416,7 +410,7 @@ def main():
             rulesForLine = [rule for rule in rules if rule.iPattern in errorPatternIndices[iLine]]
             for rule in rulesForLine:
                 if not rule.evaluate(errorPatternIndices, iLineTarget=iLine):
-                    orderingHeatmap[iLine] += ruleValidities[rule] / len(rulesForLine)
+                    orderingHeatmap[iLine] += rules[rule] / len(rulesForLine)
         orderingHeatmapMax = max(orderingHeatmap)
 
     # Check for unmatched lines TODO: parellelize
