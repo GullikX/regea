@@ -109,7 +109,7 @@ class Rule:
         self.patternStringOther = patternStringList[self.iPatternOther]
         self.type = random.randint(0, len(RuleType) - 1)
 
-    def evaluate(self, patternIndices):
+    def evaluate(self, patternIndices, iLineTarget=None):
         if self.iPattern == self.iPatternOther:
             return False
 
@@ -121,6 +121,10 @@ class Rule:
                 iPatternMatches.add(iLine)
             if self.iPatternOther in patternIndices[iLine]:
                 iPatternOtherMatches.add(iLine)
+
+        if iLineTarget is not None:
+            assert iLineTarget in iPatternMatches
+            iPatternMatches = set([iLineTarget])
 
         iPatternMatches = np.array(list(iPatternMatches))
         iPatternOtherMatches = np.array(list(iPatternOtherMatches))
@@ -397,14 +401,10 @@ def main():
         print(f"[{time.time() - timeStart:.3f}] Checking for violated ordering rules...")
         orderingHeatmap = np.zeros(len(errorFileContents), dtype=np.float_)
         for iLine in range(len(errorFileContents)):  # TODO: parallelize (mpi reduce?)
-            rulesForPattern = [
-                rule
-                for rule in rules
-                if rule.iPattern in errorPatternIndices[iLine] or rule.iPatternOther in errorPatternIndices[iLine]
-            ]
-            for rule in rulesForPattern:
-                if not rule.evaluate(errorPatternIndices):
-                    orderingHeatmap[iLine] += ruleValidities[rule] / len(rulesForPattern)
+            rulesForLine = [rule for rule in rules if rule.iPattern in errorPatternIndices[iLine]]
+            for rule in rulesForLine:
+                if not rule.evaluate(errorPatternIndices, iLineTarget=iLine):
+                    orderingHeatmap[iLine] += ruleValidities[rule] / len(rulesForLine)
         orderingHeatmapMax = max(orderingHeatmap)
 
     # Check for unmatched lines TODO: parellelize
@@ -463,9 +463,7 @@ def main():
                     continue
                 lineToInsert = random.choice(lineToInsertCandidates)
 
-                rulesForPattern = [
-                    rule for rule in rules if rule.iPattern == iPattern or rule.iPatternOther == iPattern
-                ]
+                rulesForPattern = [rule for rule in rules if rule.iPattern == iPattern]
                 nRulesValid = np.zeros(len(errorFileContentsWithMissing))
                 for iInsert in range(len(errorFileContentsWithMissing)):
                     errorFileContentsTemp = errorFileContentsWithMissing.copy()
@@ -474,7 +472,7 @@ def main():
                     errorPatternIndicesTemp.insert(iInsert, set([iPattern]))
 
                     for rule in rulesForPattern:
-                        if rule.evaluate(errorPatternIndicesTemp):
+                        if rule.evaluate(errorPatternIndicesTemp, iLineTarget=iInsert):
                             nRulesValid[iInsert] += 1
                 iInsertBest = nRulesValid.argmax()
                 errorFileContentsWithMissing.insert(iInsertBest, lineToInsert)
