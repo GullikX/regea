@@ -123,8 +123,8 @@ def checkMatch(patternString, inputString, printErrors=False):
         stderr=subprocess.PIPE,
     )
     output = process.communicate(inputString.encode())
-    if printErrors and output[Stream.STDERR]:
-        print(output[Stream.STDERR].decode().rstrip("\n"))
+    assert len(output[Stream.STDERR]) == 0, f"{output[Stream.STDERR].decode()}"
+
     return process.returncode == 0
 
 
@@ -137,6 +137,7 @@ def countFileMatches(patternString, filenames):
     )
     output = process.communicate()
     assert len(output[Stream.STDERR]) == 0, f"{output[Stream.STDERR].decode()}"
+
     nMatches = [int(count) for count in output[Stream.STDOUT].splitlines()]
     return nMatches
 
@@ -155,6 +156,8 @@ def padPatternString(patternString, inputString, padRange=0):
     )
 
     output = process.communicate(inputString.encode())
+    assert len(output[Stream.STDERR]) == 0, f"{output[Stream.STDERR].decode()}"
+
     if not output[Stream.STDOUT]:
         return None
 
@@ -243,7 +246,7 @@ class Optional:
     @classmethod
     def primitive(cls, *args):
         assert len(args) == cls.arity
-        return args[0] if args[0].endswith("?") else f"{args[0]}?"
+        return f"(?:{args[0]})?"
 
     @classmethod
     def fitness(cls, args):
@@ -353,20 +356,20 @@ class PositiveLookahead:
         return 0
 
 
-class PositiveLookbehind:
-    argTypes = (str,)
-    arity = len(argTypes)
-    returns = str
-
-    @classmethod
-    def primitive(cls, *args):
-        assert len(args) == cls.arity
-        return f"(?<={args[0]})"
-
-    @classmethod
-    def fitness(cls, args):
-        assert len(args) == cls.arity
-        return 0
+# class PositiveLookbehind:
+#    argTypes = (str,)
+#    arity = len(argTypes)
+#    returns = str
+#
+#    @classmethod
+#    def primitive(cls, *args):
+#        assert len(args) == cls.arity
+#        return f"(?<={args[0]})"
+#
+#    @classmethod
+#    def fitness(cls, args):
+#        assert len(args) == cls.arity
+#        return 0
 
 
 # class NegativeLookahead:
@@ -549,7 +552,7 @@ def generatePatternString(targetString, args):
         Set.__name__: Set,
         NegatedSet.__name__: NegatedSet,
         PositiveLookahead.__name__: PositiveLookahead,
-        PositiveLookbehind.__name__: PositiveLookbehind,
+        # PositiveLookbehind.__name__: PositiveLookbehind,
         # NegativeLookahead.__name__: NegativeLookahead,
         # NegativeLookbehind.__name__: NegativeLookbehind,
     }
