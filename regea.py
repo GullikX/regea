@@ -203,7 +203,7 @@ class IdentityBool:
     @classmethod
     def fitness(cls, args):
         assert len(args) == cls.arity
-        return 0
+        return 0.0
 
 
 class IdentityAsciiCode:
@@ -219,7 +219,7 @@ class IdentityAsciiCode:
     @classmethod
     def fitness(cls, args):
         assert len(args) == cls.arity
-        return 0
+        return 0.0
 
 
 class Concatenate:
@@ -235,7 +235,7 @@ class Concatenate:
     @classmethod
     def fitness(cls, args):
         assert len(args) == cls.arity
-        return 0
+        return 0.0
 
 
 class Optional:
@@ -251,7 +251,7 @@ class Optional:
     @classmethod
     def fitness(cls, args):
         assert len(args) == cls.arity
-        return 0
+        return 0.0
 
 
 class Range:
@@ -269,7 +269,7 @@ class Range:
     @classmethod
     def fitness(cls, args):
         assert len(args) == cls.arity
-        return 1 / (abs(args[0] - args[1]) + 1)
+        return 1.0 / (abs(args[0] - args[1]) + 1)
 
 
 class NegatedRange:
@@ -287,7 +287,7 @@ class NegatedRange:
     @classmethod
     def fitness(cls, args):
         assert len(args) == cls.arity
-        return 1 / (len(string.printable) - abs(args[0] - args[1]))
+        return 1.0 / (len(string.printable) - abs(args[0] - args[1]))
 
 
 class Set:
@@ -311,9 +311,9 @@ class Set:
     def fitness(cls, args):
         assert len(args) == cls.arity
         try:
-            return 1 / sum(args)
+            return 1.0 / sum(args)
         except ZeroDivisionError:
-            return 0
+            return 0.0
 
 
 class NegatedSet:
@@ -335,9 +335,9 @@ class NegatedSet:
     def fitness(cls, args):
         assert len(args) == cls.arity
         try:
-            return 1 / (nAllowedCharacters - sum(args))
+            return 1.0 / (nAllowedCharacters - sum(args))
         except ZeroDivisionError:
-            return 0
+            return 0.0
 
 
 class PositiveLookahead:
@@ -353,7 +353,7 @@ class PositiveLookahead:
     @classmethod
     def fitness(cls, args):
         assert len(args) == cls.arity
-        return 0
+        return 0.0
 
 
 # class PositiveLookbehind:
@@ -369,7 +369,7 @@ class PositiveLookahead:
 #    @classmethod
 #    def fitness(cls, args):
 #        assert len(args) == cls.arity
-#        return 0
+#        return 0.0
 
 
 # class NegativeLookahead:
@@ -385,7 +385,7 @@ class PositiveLookahead:
 #    @classmethod
 #    def fitness(cls, args):
 #        assert len(args) == cls.arity
-#        return 0
+#        return 0.0
 
 
 # class NegativeLookbehind:
@@ -401,7 +401,7 @@ class PositiveLookahead:
 #    @classmethod
 #    def fitness(cls, args):
 #        assert len(args) == cls.arity
-#        return 0
+#        return 0.0
 
 
 # Genetic programming ephemeral constants
@@ -412,7 +412,7 @@ class RandomPrintableAsciiCode:
         return random.randint(printableAsciiMin, printableAsciiMax)
 
     def fitness():
-        return 0
+        return 0.0
 
 
 class RandomCharacter:
@@ -422,7 +422,7 @@ class RandomCharacter:
         return escape(chr(random.randint(printableAsciiMin, printableAsciiMax)))
 
     def fitness():
-        return 1
+        return 1.0
 
 
 class RandomBool:
@@ -432,7 +432,7 @@ class RandomBool:
         return random.choice([True, False])
 
     def fitness():
-        return 0
+        return 0.0
 
 
 # Genetic programming terminals
@@ -443,7 +443,7 @@ class Empty:
         return ""
 
     def fitness():
-        return 0
+        return 0.0
 
 
 class Wildcard:
@@ -453,7 +453,7 @@ class Wildcard:
         return "."
 
     def fitness():
-        return 1 / len(string.printable)
+        return 1.0 / len(string.printable)
 
 
 class WordBoundary:
@@ -483,7 +483,7 @@ class WordBeginning:
         return "(?:\\b(?=\\w))"
 
     def fitness():
-        return 1
+        return 1.0
 
 
 class WordEnd:
@@ -493,7 +493,7 @@ class WordEnd:
         return "(?:(?<=\\w)\\b)"
 
     def fitness():
-        return 1
+        return 1.0
 
 
 class WordCharacter:
@@ -503,7 +503,7 @@ class WordCharacter:
         return "\\w"
 
     def fitness():
-        return 1 / (len(string.ascii_letters) + len(string.digits) + 1)
+        return 1.0 / (len(string.ascii_letters) + len(string.digits) + 1)
 
 
 class NonWordCharacter:
@@ -513,7 +513,7 @@ class NonWordCharacter:
         return "\\W"
 
     def fitness():
-        return 1 / (len(string.printable) - (len(string.ascii_letters) + len(string.digits) + 1))
+        return 1.0 / (len(string.printable) - (len(string.ascii_letters) + len(string.digits) + 1))
 
 
 class Whitespace:
@@ -523,7 +523,7 @@ class Whitespace:
         return "\\s"
 
     def fitness():
-        return 1 / len(string.whitespace)
+        return 1.0 / len(string.whitespace)
 
 
 class NonWhitespace:
@@ -533,7 +533,7 @@ class NonWhitespace:
         return "\\S"
 
     def fitness():
-        return 1 / (len(string.printable) - len(string.whitespace))
+        return 1.0 / (len(string.printable) - len(string.whitespace))
 
 
 # Genetic programming algorithm
