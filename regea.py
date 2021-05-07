@@ -582,7 +582,12 @@ def generatePatternString(targetString, args):
 
     def evaluateIndividual(individual):
         patternString = str(toolbox.compile(individual))
-        if "\\b\\b" in patternString or "\\B\\B" in patternString:
+        if (
+            2 * WordBoundary.terminal() in patternString
+            or 2 * NonWordBoundary.terminal() in patternString
+            or 2 * WordBeginning.terminal() in patternString
+            or 2 * WordEnd.terminal() in patternString
+        ):
             return (0.0,)
 
         patternStringPadded = padPatternString(patternString, targetString)
