@@ -106,6 +106,10 @@ class AsciiCode(int):
     pass
 
 
+class Regex(str):
+    pass
+
+
 # Util functions
 def argmin(iterable):
     return min(range(len(iterable)), key=iterable.__getitem__)
@@ -223,9 +227,9 @@ class IdentityAsciiCode:
 
 
 class Concatenate:
-    argTypes = (str, str)
+    argTypes = (Regex, Regex)
     arity = len(argTypes)
-    returns = str
+    returns = Regex
 
     @classmethod
     def primitive(cls, *args):
@@ -239,9 +243,9 @@ class Concatenate:
 
 
 class Optional:
-    argTypes = (str,)
+    argTypes = (Regex,)
     arity = len(argTypes)
-    returns = str
+    returns = Regex
 
     @classmethod
     def primitive(cls, *args):
@@ -257,7 +261,7 @@ class Optional:
 class Range:
     argTypes = (AsciiCode, AsciiCode)
     arity = len(argTypes)
-    returns = str
+    returns = Regex
 
     @classmethod
     def primitive(cls, *args):
@@ -275,7 +279,7 @@ class Range:
 class NegatedRange:
     argTypes = (AsciiCode, AsciiCode)
     arity = len(argTypes)
-    returns = str
+    returns = Regex
 
     @classmethod
     def primitive(cls, *args):
@@ -293,7 +297,7 @@ class NegatedRange:
 class Set:
     argTypes = (bool,) * nAllowedCharacters
     arity = len(argTypes)
-    returns = str
+    returns = Regex
 
     @classmethod
     def primitive(cls, *args):
@@ -319,7 +323,7 @@ class Set:
 class NegatedSet:
     argTypes = (bool,) * nAllowedCharacters
     arity = len(argTypes)
-    returns = str
+    returns = Regex
 
     @classmethod
     def primitive(cls, *args):
@@ -341,9 +345,9 @@ class NegatedSet:
 
 
 class PositiveLookahead:
-    argTypes = (str,)
+    argTypes = (Regex,)
     arity = len(argTypes)
-    returns = str
+    returns = Regex
 
     @classmethod
     def primitive(cls, *args):
@@ -357,9 +361,9 @@ class PositiveLookahead:
 
 
 # class PositiveLookbehind:
-#    argTypes = (str,)
+#    argTypes = (Regex,)
 #    arity = len(argTypes)
-#    returns = str
+#    returns = Regex
 #
 #    @classmethod
 #    def primitive(cls, *args):
@@ -373,9 +377,9 @@ class PositiveLookahead:
 
 
 # class NegativeLookahead:
-#    argTypes = (str,)
+#    argTypes = (Regex,)
 #    arity = len(argTypes)
-#    returns = str
+#    returns = Regex
 #
 #    @classmethod
 #    def primitive(cls, *args):
@@ -389,9 +393,9 @@ class PositiveLookahead:
 
 
 # class NegativeLookbehind:
-#    argTypes = (str,)
+#    argTypes = (Regex,)
 #    arity = len(argTypes)
-#    returns = str
+#    returns = Regex
 #
 #    @classmethod
 #    def primitive(cls, *args):
@@ -416,7 +420,7 @@ class RandomPrintableAsciiCode:
 
 
 class RandomCharacter:
-    returns = str
+    returns = Regex
 
     def ephemeralConstant():
         return escape(chr(random.randint(printableAsciiMin, printableAsciiMax)))
@@ -437,7 +441,7 @@ class RandomBool:
 
 # Genetic programming terminals
 class Empty:
-    returns = str
+    returns = Regex
 
     def terminal():
         return ""
@@ -447,7 +451,7 @@ class Empty:
 
 
 class Wildcard:
-    returns = str
+    returns = Regex
 
     def terminal():
         return "."
@@ -457,7 +461,7 @@ class Wildcard:
 
 
 class WordBoundary:
-    returns = str
+    returns = Regex
 
     def terminal():
         return "\\b"
@@ -467,7 +471,7 @@ class WordBoundary:
 
 
 class NonWordBoundary:
-    returns = str
+    returns = Regex
 
     def terminal():
         return "\\B"
@@ -477,7 +481,7 @@ class NonWordBoundary:
 
 
 class WordBeginning:
-    returns = str
+    returns = Regex
 
     def terminal():
         return "(?:\\b(?=\\w))"
@@ -487,7 +491,7 @@ class WordBeginning:
 
 
 class WordEnd:
-    returns = str
+    returns = Regex
 
     def terminal():
         return "(?:(?<=\\w)\\b)"
@@ -497,7 +501,7 @@ class WordEnd:
 
 
 class WordCharacter:
-    returns = str
+    returns = Regex
 
     def terminal():
         return "\\w"
@@ -507,7 +511,7 @@ class WordCharacter:
 
 
 class NonWordCharacter:
-    returns = str
+    returns = Regex
 
     def terminal():
         return "\\W"
@@ -517,7 +521,7 @@ class NonWordCharacter:
 
 
 class Whitespace:
-    returns = str
+    returns = Regex
 
     def terminal():
         return "\\s"
@@ -527,7 +531,7 @@ class Whitespace:
 
 
 class NonWhitespace:
-    returns = str
+    returns = Regex
 
     def terminal():
         return "\\S"
@@ -577,7 +581,7 @@ def generatePatternString(targetString, args):
     }
 
     def evaluateIndividual(individual):
-        patternString = toolbox.compile(individual)
+        patternString = str(toolbox.compile(individual))
         if "\\b\\b" in patternString or "\\B\\B" in patternString:
             return (0.0,)
 
@@ -619,14 +623,14 @@ def generatePatternString(targetString, args):
         return (fitness,)
 
     if psetInit is None:
-        psetInit = deap.gp.PrimitiveSetTyped("psetInit", [], str)
+        psetInit = deap.gp.PrimitiveSetTyped("psetInit", [], Regex)
         psetInit.addPrimitive(
             Concatenate.primitive, Concatenate.argTypes, Concatenate.returns, name=Concatenate.__name__
         )
         psetInit.addTerminal(Wildcard.terminal(), Wildcard.returns, name=Wildcard.__name__)
 
     if psetMutate is None:
-        psetMutate = deap.gp.PrimitiveSetTyped("psetMutate", [], str)
+        psetMutate = deap.gp.PrimitiveSetTyped("psetMutate", [], Regex)
 
         for primitive in primitives.values():
             psetMutate.addPrimitive(primitive.primitive, primitive.argTypes, primitive.returns, name=primitive.__name__)
@@ -695,7 +699,7 @@ def generatePatternString(targetString, args):
     assert len(set([node.name for node in population[0]])) <= 2
 
     # Replace some wildcards with full ranges
-    primitiveRange = [primitive for primitive in psetMutate.primitives[str] if primitive.name == Range.__name__][0]
+    primitiveRange = [primitive for primitive in psetMutate.primitives[Regex] if primitive.name == Range.__name__][0]
     ephemeralRandomPrintableAsciiCode = [
         terminal for terminal in psetMutate.terminals[AsciiCode] if terminal == deap.gp.RandomPrintableAsciiCode
     ][0]
@@ -806,7 +810,7 @@ def generatePatternString(targetString, args):
         # iGeneration += 1
 
     individualBest = copy.deepcopy(hallOfFame[0])
-    patternStringBest = toolbox.compile(individualBest)
+    patternStringBest = str(toolbox.compile(individualBest))
     patternStringBestPadded = padPatternString(patternStringBest, targetString, padRange=args.padRange)
     assert patternStringBestPadded is not None
     assert checkMatch(patternStringBestPadded, targetString)
