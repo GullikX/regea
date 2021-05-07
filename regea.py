@@ -255,7 +255,7 @@ class Optional:
     @classmethod
     def fitness(cls, args):
         assert len(args) == cls.arity
-        return 0.0
+        return -1.0
 
 
 class Range:
