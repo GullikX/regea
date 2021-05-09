@@ -30,7 +30,7 @@ This section assumes a log file `output.log` which contains a series of test cas
 
 Make sure that the log file is well-formatted:
 ```
-$ tr -cd '[:print:]\n' output.log > output.log1
+$ tr -cd '[:print:]\n' < output.log > output.log1
 $ dos2unix output.log1
 ```
 
