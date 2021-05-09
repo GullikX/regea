@@ -202,7 +202,7 @@ def countStddevs(mean, stddev, value):
 
 def exportHtmlFile(outputFilename, fileContents, heatmap, colorPositive, colorNegative):
     assert len(fileContents) == len(heatmap)
-    heatmapMax = max(heatmap)
+    heatmapMax = np.max(np.abs(heatmap))
 
     htmlNode = ET.Element("html")
     bodyNode = ET.SubElement(htmlNode, "body")
@@ -538,7 +538,7 @@ def main():
 
         for line, insertPosition in insertionMap.items():  # Items are inserted in reverse order to not mess up indices
             errorFileContentsWithMissing.insert(insertPosition, line)
-            diffHeatmapWithMissing.insert(insertPosition, -diffHeatmapMax)
+            diffHeatmapWithMissing.insert(insertPosition, -diffHeatmapMax if diffHeatmapMax > 0.0 else -1.0)
         assert len(errorFileContentsWithMissing) == len(diffHeatmapWithMissing)
 
     # Write results to disk
