@@ -108,7 +108,7 @@ class Rule:
         self.patternStringOther = patternStringList[self.iPatternOther]
         self.type = random.randint(0, len(RuleType) - 1)
 
-    def evaluate(self, patternIndices, iLineTarget=None):
+    def evaluate(self, patternIndices, iLineTarget=None, resultWhenNotEvaluable=False):
         if self.iPattern == self.iPatternOther:
             return False
 
@@ -129,7 +129,7 @@ class Rule:
         iPatternOtherMatches = np.array(list(iPatternOtherMatches))
 
         if len(iPatternMatches) == 0 or len(iPatternOtherMatches) == 0:
-            return False
+            return resultWhenNotEvaluable
 
         if self.type == RuleType.BEFORE_ALL:
             for iPatternMatch in iPatternMatches:
@@ -413,7 +413,7 @@ def main():
         for iLine in range(len(errorFileContents)):  # TODO: parallelize (mpi reduce?)
             rulesForLine = [rule for rule in rules if rule.iPattern in errorPatternIndices[iLine]]
             for rule in rulesForLine:
-                if not rule.evaluate(errorPatternIndices, iLineTarget=iLine):
+                if not rule.evaluate(errorPatternIndices, iLineTarget=iLine, resultWhenNotEvaluable=True):
                     orderingHeatmap[iLine] += rules[rule] / len(rulesForLine)
         orderingHeatmapMax = max(orderingHeatmap)
 
@@ -517,7 +517,7 @@ def main():
             errorPatternIndicesTemp.insert(iInsert, patternIndices[lineToInsert])
 
             for rule in rulesForLine:
-                if rule.evaluate(errorPatternIndicesTemp, iLineTarget=iInsert):
+                if rule.evaluate(errorPatternIndicesTemp, iLineTarget=iInsert, resultWhenNotEvaluable=True):
                     nRulesValid[iInsert] += 1
         insertPositionsLocal[iLinesToInsertLocal[i]] = nRulesValid.argmax()
         if args.verbose:
