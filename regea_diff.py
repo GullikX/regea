@@ -509,7 +509,7 @@ def main():
     for i in range(nLinesToInsertLocal[mpiRank]):
         lineToInsert = linesToInsert[iLinesToInsertLocal[i]]
         rulesForLine = [rule for rule in rules if rule.iPattern in patternIndices[lineToInsert]]
-        nRulesValid = np.zeros(len(errorFileContents), dtype=np.int_)
+        nRuleViolations = np.zeros(len(errorFileContents), dtype=np.float_)
         for iInsert in range(len(errorFileContents)):
             errorFileContentsTemp = errorFileContents.copy()
             errorFileContentsTemp.insert(iInsert, lineToInsert)
@@ -517,9 +517,9 @@ def main():
             errorPatternIndicesTemp.insert(iInsert, patternIndices[lineToInsert])
 
             for rule in rulesForLine:
-                if rule.evaluate(errorPatternIndicesTemp, iLineTarget=iInsert, resultWhenNotEvaluable=True):
-                    nRulesValid[iInsert] += 1
-        insertPositionsLocal[iLinesToInsertLocal[i]] = nRulesValid.argmax()
+                if not rule.evaluate(errorPatternIndicesTemp, iLineTarget=iInsert, resultWhenNotEvaluable=True):
+                    nRuleViolations[iInsert] += rules[rule]
+        insertPositionsLocal[iLinesToInsertLocal[i]] = nRuleViolations.argmin()
         if args.verbose:
             print(
                 f"[{time.time() - timeStart:.3f}] Adding line '{lineToInsert}' at position {insertPositionsLocal[iLinesToInsertLocal[i]]}..."
