@@ -125,7 +125,7 @@ Configuration options for `regea_diff.py`
 
 * `--errorFile` file for which to search for discrepancies (required)
 * `--verbose` write extra output to the terminal
-* `--patternFilename` file to load regex patterns from (shold be the file outputted by `regea.py`)
+* `--patternFilename` file to load regex patterns from (should be the file outputted by `regea.py`)
 * `--outputFilenameDiffSuffix` suffix to add to the output diff file
 * `--outputFilenameOrderingSuffix` suffix to add to the output ordering file
 * `--iterationTimeLimit` timeout for generating ordering rules of the file contents
