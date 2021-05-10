@@ -414,7 +414,7 @@ def main():
             rulesForLine = [rule for rule in rules if rule.iPattern in errorPatternIndices[iLine]]
             for rule in rulesForLine:
                 if not rule.evaluate(errorPatternIndices, iLineTarget=iLine, resultWhenNotEvaluable=True):
-                    orderingHeatmap[iLine] += rules[rule] / len(rulesForLine)
+                    orderingHeatmap[iLine] += rules[rule]
         orderingHeatmapMax = max(orderingHeatmap)
 
     # Check for unmatched lines TODO: parellelize
