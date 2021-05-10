@@ -101,6 +101,36 @@ This creates the files `$errorFile.diff.html` and `$errorFile.ordering.html` whi
 
 Parameters for each python file can be listed using the `--help` option.
 
+Configuration options for `regea.py`:
+
+* `--verbose` write target strings and generated regex patterns to the terminal
+* `--outputFilename` filename to write the generated regex patterns to
+* `--populationSize` size of the population in the genetic programming algorithm
+* `--evolutionTimeout` time limit for running the genetic programming algorithm
+* `--tournamentSize` selection size for tournament selection
+* `--crossoverProbability` probability of swapping two random subtrees between two individuals
+* `--crossoverLeafBias` probability that crossover is performed at leaf nodes
+* `--mutInitialProbability` probability that wildcard characters are replaced with full ranges when initializing the population
+* `--mutUniformProbability` probability that a random subtree is replaced by a new, randomly generated subtree
+* `--mutNodeReplacementProbability` probability that a constant node is replaced with a node of another type
+* `--mutEphemeralAllProbability` probability that the values of all contant nodes are regenerated
+* `--mutEphemeralOneProbability` probability that the value of one constant node is regenerated
+* `--mutInsertProbability` probability that a new, randomly generated subtree is inserted
+* `--mutShrinkProbability` probability that a random subtree is removed
+* `--treeHeightMax` upper limit on the size of individuals, prevents bloat
+* `--treeHeightMaxInit` upper limit on the size of individuals when initializing the population
+* `--padRange` specifies the leeway when individuals are padded after evolution
+
+Configuration options for `regea_diff.py`
+
+* `--errorFile` file for which to search for discrepancies (required)
+* `--verbose` write extra output to the terminal
+* `--patternFilename` file to load regex patterns from (shold be the file outputted by `regea.py`)
+* `--outputFilenameDiffSuffix` suffix to add to the output diff file
+* `--outputFilenameOrderingSuffix` suffix to add to the output ordering file
+* `--iterationTimeLimit` timeout for generating ordering rules of the file contents
+* `--ruleValidityThreshold` the proportion of reference files which must satisfy an ordering rule for the rule to be considered valid
+
 For convenience, command line parameters can also be specified in json-formatted config files. Specify a config file to be used using the `REGEA_CONFIG` (for `regea.py`) or `REGEA_DIFF_CONFIG` (for `regea_diff.py`) environment variables. If a parameter is specified in both the given config file and on the command line, the argument specified on the command line takes precedence. Example:
 
 ```
