@@ -540,6 +540,26 @@ class NonWhitespace:
         return 1.0 / (len(string.printable) - len(string.whitespace))
 
 
+class Digit:
+    returns = Regex
+
+    def terminal():
+        return "\\d"
+
+    def fitness():
+        return 1.0 / len(string.digits)
+
+
+class NonDigit:
+    returns = Regex
+
+    def terminal():
+        return "\\D"
+
+    def fitness():
+        return 1.0 / (len(string.printable) - len(string.digits))
+
+
 # Genetic programming algorithm
 def generatePatternString(targetString, args):
     global psetInit
@@ -578,6 +598,8 @@ def generatePatternString(targetString, args):
         NonWordCharacter.__name__: NonWordCharacter,
         Whitespace.__name__: Whitespace,
         NonWhitespace.__name__: NonWhitespace,
+        Digit.__name__: Digit,
+        NonDigit.__name__: NonDigit,
     }
 
     def evaluateIndividual(individual):
