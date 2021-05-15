@@ -936,7 +936,10 @@ def main():
         while True:
             if linesCurrent.count(linesCurrent[0]) == len(linesCurrent):
                 patternString = f"^{escape(linesCurrent[0])}$"
-                patterns[patternString] = re.compile(patternString, re.MULTILINE)
+                if patternString not in patterns:
+                    patterns[patternString] = re.compile(patternString, re.MULTILINE)
+                    if args.verbose:
+                        print(f"[{time.time() - timeStart:.3f}] Generated pattern: '{patternString}'")
             iLineMin = argmin(linesCurrent)
             indices[iLineMin] += 1
             try:
