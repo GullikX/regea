@@ -913,6 +913,7 @@ def main():
             with open(args.inputFiles[iFile], "r") as f:
                 fileContents[iFile] = f.read().splitlines()
             fileContents[iFile] = list(filter(None, fileContents[iFile]))
+            assert len(fileContents[iFile]) > 0, f"Input file '{args.inputFiles[iFile]}' contains no non-empty lines"
             for iLine in range(len(fileContents[iFile])):
                 assert fileContents[iFile][
                     iLine

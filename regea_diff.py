@@ -278,6 +278,7 @@ def main():
     with open(args.errorFile, "r") as f:
         errorFileContents = f.read().splitlines()
     errorFileContents = list(filter(None, errorFileContents))
+    assert len(errorFileContents) > 0, f"Error file '{args.errorFile}' contains no non-empty lines"
     for iLine in range(len(errorFileContents)):
         assert errorFileContents[
             iLine
@@ -291,6 +292,7 @@ def main():
         with open(args.referenceFiles[iFile], "r") as f:
             referenceFileContents[iFile] = f.read().splitlines()
         referenceFileContents[iFile] = list(filter(None, referenceFileContents[iFile]))
+        assert len(referenceFileContents[iFile]) > 0, f"Reference file '{args.referenceFiles[iFile]}' contains no non-empty lines"
         for iLine in range(len(referenceFileContents[iFile])):
             assert referenceFileContents[iFile][
                 iLine
