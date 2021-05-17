@@ -129,6 +129,7 @@ Configuration options for `regea_diff.py`
 * `--outputFilenameDiffSuffix` suffix to add to the output diff file
 * `--outputFilenameOrderingSuffix` suffix to add to the output ordering file
 * `--iterationTimeLimit` timeout for generating ordering rules of the file contents
+* `--lineInsertionThreshold` threshold (in standard deviations) for which to import log lines from the training data
 * `--ruleValidityThreshold` the proportion of reference files which must satisfy an ordering rule for the rule to be considered valid
 
 For convenience, command line parameters can also be specified in json-formatted config files. Specify a config file to be used using the `REGEA_CONFIG` (for `regea.py`) or `REGEA_DIFF_CONFIG` (for `regea_diff.py`) environment variables. If a parameter is specified in both the given config file and on the command line, the argument specified on the command line takes precedence. Example:

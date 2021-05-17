@@ -38,6 +38,7 @@ argsDefault = {
     "outputFilenameDiffSuffix": "diff.html",
     "outputFilenameOrderingSuffix": "ordering.html",
     "iterationTimeLimit": 60.0,  # seconds
+    "lineInsertionThreshold": 1.0,  # number of standard deviations
     "ruleValidityThreshold": 0.90,
 }
 
@@ -470,7 +471,7 @@ def main():
         print(f"[{time.time() - timeStart:.3f}] Checking for removed lines...")
         linesToInsert = []
         for iPattern in range(len(patternStringList)):
-            if frequencyStddevs[iPattern] == 0 and errorFrequencies[iPattern] < frequencyMeans[iPattern]:
+            if errorFrequencies[iPattern] < frequencyMeans[iPattern] and countStddevs(frequencyMeans[iPattern], frequencyStddevs[iPattern], errorFrequencies[iPattern]) > args.lineInsertionThreshold:
                 lineToInsertCandidates = [
                     line
                     for line in matchedLinesPerPattern[patternStringList[iPattern]]
