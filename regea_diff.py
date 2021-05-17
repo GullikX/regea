@@ -412,12 +412,12 @@ def main():
     if mpiRank == MpiNode.MASTER:
         print(f"[{time.time() - timeStart:.3f}] Generated a total of {len(rules)} valid ordering rules.")
         print(f"[{time.time() - timeStart:.3f}] Checking for violated ordering rules...")
-        orderingHeatmap = np.zeros(len(errorFileContents), dtype=np.float_)
+        orderingHeatmap = np.zeros(len(errorFileContents), dtype=np.int_)
         for iLine in range(len(errorFileContents)):  # TODO: parallelize (mpi reduce?)
             rulesForLine = [rule for rule in rules if rule.iPattern in errorPatternIndices[iLine]]
             for rule in rulesForLine:
                 if not rule.evaluate(errorPatternIndices, iLineTarget=iLine, resultWhenNotEvaluable=True):
-                    orderingHeatmap[iLine] += rules[rule]
+                    orderingHeatmap[iLine] += 1
         orderingHeatmapMax = max(orderingHeatmap)
 
     # Check for unmatched lines TODO: parellelize
