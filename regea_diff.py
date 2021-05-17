@@ -372,6 +372,7 @@ def main():
             referencePatternIndices[iFile] = [None] * len(referenceFileContents[iFile])
             for iLine in range(len(referenceFileContents[iFile])):
                 referencePatternIndices[iFile][iLine] = patternIndices[referenceFileContents[iFile][iLine]]
+            assert len(referencePatternIndices[iFile][iLine]) > 0, f"Line '{referenceFileContents[iFile][iLine]}' in file '{args.referenceFiles[iFile]}' not matched by any pattern. Does the pattern file '{args.patternFilename}' really correspond to the specified reference files?"
     else:
         patternIndices = None
         errorPatternIndices = None
