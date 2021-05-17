@@ -272,6 +272,8 @@ def main():
             datatype.itemsize == mpiTypeMap[datatype].Get_size()
         ), f"Datatype mpiSize mismatch: data type '{datatype.name}' has mpiSize {datatype.itemsize} while '{mpiTypeMap[datatype].name}' has mpiSize {mpiTypeMap[datatype].Get_size()}. Please adjust the mpiTypeMap parameter."
 
+    assert args.errorFile not in args.referenceFiles, f"File '{args.errorFile}' cannot be both error file and reference file"
+
     # Load error file
     if mpiRank == MpiNode.MASTER:
         print(f"[{time.time() - timeStart:.3f}] Loading input files...")
