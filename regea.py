@@ -42,7 +42,7 @@ import time
 argsDefault = {  # TODO: update values
     "outputFilename": "regea.output.patterns",
     "populationSize": 50,
-    "evolutionTimeout": 60.0,  # seconds
+    "evolutionTimeout": 300.0,  # seconds
     "tournamentSize": 3,
     "crossoverProbability": 0.17896349,
     "crossoverLeafBias": 0.5,

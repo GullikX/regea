@@ -37,7 +37,7 @@ argsDefault = {
     "patternFilename": "regea.output.patterns",
     "outputFilenameDiffSuffix": "diff.html",
     "outputFilenameOrderingSuffix": "ordering.html",
-    "iterationTimeLimit": 60.0,  # seconds
+    "iterationTimeLimit": 300.0,  # seconds
     "lineInsertionThreshold": 1.0,  # number of standard deviations
     "ruleValidityThreshold": 0.90,
 }
