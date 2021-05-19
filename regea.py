@@ -998,6 +998,8 @@ def main():
 
         print(f"[{time.time() - timeStart:.3f}] Done.")
 
+    return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())
