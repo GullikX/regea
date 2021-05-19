@@ -272,7 +272,9 @@ def main():
             datatype.itemsize == mpiTypeMap[datatype].Get_size()
         ), f"Datatype mpiSize mismatch: data type '{datatype.name}' has mpiSize {datatype.itemsize} while '{mpiTypeMap[datatype].name}' has mpiSize {mpiTypeMap[datatype].Get_size()}. Please adjust the mpiTypeMap parameter."
 
-    assert args.errorFile not in args.referenceFiles, f"File '{args.errorFile}' cannot be both error file and reference file"
+    assert (
+        args.errorFile not in args.referenceFiles
+    ), f"File '{args.errorFile}' cannot be both error file and reference file"
 
     # Load error file
     if mpiRank == MpiNode.MASTER:
@@ -295,7 +297,9 @@ def main():
         with open(args.referenceFiles[iFile], "r") as f:
             referenceFileContents[iFile] = f.read().splitlines()
         referenceFileContents[iFile] = list(filter(None, referenceFileContents[iFile]))
-        assert len(referenceFileContents[iFile]) > 0, f"Reference file '{args.referenceFiles[iFile]}' contains no non-empty lines"
+        assert (
+            len(referenceFileContents[iFile]) > 0
+        ), f"Reference file '{args.referenceFiles[iFile]}' contains no non-empty lines"
         for iLine in range(len(referenceFileContents[iFile])):
             assert referenceFileContents[iFile][
                 iLine
@@ -374,7 +378,9 @@ def main():
             referencePatternIndices[iFile] = [None] * len(referenceFileContents[iFile])
             for iLine in range(len(referenceFileContents[iFile])):
                 referencePatternIndices[iFile][iLine] = patternIndices[referenceFileContents[iFile][iLine]]
-            assert len(referencePatternIndices[iFile][iLine]) > 0, f"Line '{referenceFileContents[iFile][iLine]}' in file '{args.referenceFiles[iFile]}' not matched by any pattern. Does the pattern file '{args.patternFilename}' really correspond to the specified reference files?"
+            assert (
+                len(referencePatternIndices[iFile][iLine]) > 0
+            ), f"Line '{referenceFileContents[iFile][iLine]}' in file '{args.referenceFiles[iFile]}' not matched by any pattern. Does the pattern file '{args.patternFilename}' really correspond to the specified reference files?"
     else:
         patternIndices = None
         errorPatternIndices = None
@@ -474,7 +480,11 @@ def main():
         print(f"[{time.time() - timeStart:.3f}] Checking for removed lines...")
         linesToInsert = []
         for iPattern in range(len(patternStringList)):
-            if errorFrequencies[iPattern] < frequencyMeans[iPattern] and countStddevs(frequencyMeans[iPattern], frequencyStddevs[iPattern], errorFrequencies[iPattern]) > args.lineInsertionThreshold:
+            if (
+                errorFrequencies[iPattern] < frequencyMeans[iPattern]
+                and countStddevs(frequencyMeans[iPattern], frequencyStddevs[iPattern], errorFrequencies[iPattern])
+                > args.lineInsertionThreshold
+            ):
                 lineToInsertCandidates = [
                     line
                     for line in matchedLinesPerPattern[patternStringList[iPattern]]
