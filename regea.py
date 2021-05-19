@@ -360,54 +360,6 @@ class PositiveLookahead:
         return 0.0
 
 
-# class PositiveLookbehind:
-#    argTypes = (Regex,)
-#    arity = len(argTypes)
-#    returns = Regex
-#
-#    @classmethod
-#    def primitive(cls, *args):
-#        assert len(args) == cls.arity
-#        return f"(?<={args[0]})"
-#
-#    @classmethod
-#    def fitness(cls, args):
-#        assert len(args) == cls.arity
-#        return 0.0
-
-
-# class NegativeLookahead:
-#    argTypes = (Regex,)
-#    arity = len(argTypes)
-#    returns = Regex
-#
-#    @classmethod
-#    def primitive(cls, *args):
-#        assert len(args) == cls.arity
-#        return f"(?!{args[0]})"
-#
-#    @classmethod
-#    def fitness(cls, args):
-#        assert len(args) == cls.arity
-#        return 0.0
-
-
-# class NegativeLookbehind:
-#    argTypes = (Regex,)
-#    arity = len(argTypes)
-#    returns = Regex
-#
-#    @classmethod
-#    def primitive(cls, *args):
-#        assert len(args) == cls.arity
-#        return f"(?<!{args[0]})"
-#
-#    @classmethod
-#    def fitness(cls, args):
-#        assert len(args) == cls.arity
-#        return 0.0
-
-
 # Genetic programming ephemeral constants
 class RandomPrintableAsciiCode:
     returns = AsciiCode
@@ -576,9 +528,6 @@ def generatePatternString(targetString, args):
         Set.__name__: Set,
         NegatedSet.__name__: NegatedSet,
         PositiveLookahead.__name__: PositiveLookahead,
-        # PositiveLookbehind.__name__: PositiveLookbehind,
-        # NegativeLookahead.__name__: NegativeLookahead,
-        # NegativeLookbehind.__name__: NegativeLookbehind,
     }
 
     ephemeralConstants = {
