@@ -954,6 +954,10 @@ def main():
             assert (
                 nMatches == nInputFiles
             ), f"Input file corruption detected! Try running 'dos2unix' on the input files and try again. (regex pattern '{patternString}' should match all input files)"
+        if len(patterns) > 0:
+            print(f"[{time.time() - timeStart:.3f}] Created {len(patterns)} patterns from duplicate lines.")
+        else:
+            print(f"[{time.time() - timeStart:.3f}] No duplicate lines found.")
     else:
         fileContentsConcatenated = None
 
