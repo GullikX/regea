@@ -48,10 +48,6 @@ grepCmd = ["rg", "--no-config", "--pcre2", "--no-multiline"]
 grepVersionCmd = grepCmd + ["--pcre2-version"]
 grepListMatchesCmd = grepCmd + ["--no-filename", "--no-line-number", "--"]
 
-a4size = (8.27, 11.69)  # inches
-fontSize = 8
-rowHeight = 0.019
-
 colorGreen = (76, 175, 80)
 colorRed = (244, 67, 54)
 colorAmber = (255, 193, 7)
@@ -61,7 +57,6 @@ alphaMax = 0.8
 mpiComm = MPI.COMM_WORLD
 mpiSize = mpiComm.Get_size()
 mpiRank = mpiComm.Get_rank()
-nWorkerNodes = mpiSize - 1
 mpiTypeMap = {
     np.dtype("float_"): MPI.DOUBLE,
     np.dtype("int_"): MPI.LONG,
