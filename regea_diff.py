@@ -387,7 +387,7 @@ def main():
     # Generate ordering rules
     if mpiRank == MpiNode.MASTER:
         print(f"[{time.time() - timeStart:.3f}] Generating ordering rules for {args.iterationTimeLimit} seconds...")
-    rules = {}
+    rules = set()
     timeIterationStart = time.time()
 
     while time.time() - timeIterationStart < args.iterationTimeLimit:
@@ -401,7 +401,7 @@ def main():
                 if ruleValidity < args.ruleValidityThreshold:
                     break
         else:
-            rules[rule] = ruleValidity
+            rules.add(rule)
 
     mpiComm.Barrier()
     if mpiRank == MpiNode.MASTER:
