@@ -938,7 +938,7 @@ def main():
                     break
                 iLine += 1
 
-        iNodesFinished = [False] * nWorkerNodes
+        bNodesFinished = np.zeros(nWorkerNodes, dtype=np.bool_)
         while True:
             if iLine < len(fileContentsConcatenated):
                 print(
@@ -961,12 +961,12 @@ def main():
                 status = MPI.Status()
                 patternString = mpiComm.recv(source=MPI.ANY_SOURCE, tag=MpiTag.REGEX_PATTERN, status=status)
                 if patternString is None:
-                    iNodesFinished[status.source - 1] = True
-                    if sum(iNodesFinished) == nWorkerNodes:
+                    bNodesFinished[status.source - 1] = True
+                    if sum(bNodesFinished) == nWorkerNodes:
                         break
                     else:
                         print(
-                            f"[{time.time() - timeStart:.3f}] Waiting for {nWorkerNodes - sum(iNodesFinished)} worker nodes to finish..."
+                            f"[{time.time() - timeStart:.3f}] Waiting for {nWorkerNodes - sum(bNodesFinished)} worker nodes to finish..."
                         )
                 else:
                     if args.verbose:
