@@ -37,7 +37,6 @@ argsDefault = {
     "patternFilename": "regea.output.patterns",
     "outputFilenameDiffSuffix": "diff.html",
     "outputFilenameOrderingSuffix": "ordering.html",
-    "iterationTimeLimit": 300.0,  # seconds
     "lineInsertionThreshold": 1.0,  # number of standard deviations
     "ruleValidityThreshold": 0.90,
 }
@@ -97,12 +96,12 @@ class RuleType(enum.IntEnum):
 
 
 class Rule:
-    def __init__(self, patternStringList):
-        self.iPattern = random.randint(0, len(patternStringList) - 1)
-        self.iPatternOther = random.randint(0, len(patternStringList) - 1)
+    def __init__(self, iPattern, iPatternOther, ruleType, patternStringList):
+        self.iPattern = iPattern
+        self.iPatternOther = iPatternOther
         self.patternString = patternStringList[self.iPattern]
         self.patternStringOther = patternStringList[self.iPatternOther]
-        self.type = random.randint(0, len(RuleType) - 1)
+        self.type = ruleType
 
     def evaluate(self, patternIndices, iLineTarget=None, resultWhenNotEvaluable=False):
         if self.iPattern == self.iPatternOther:
@@ -386,22 +385,27 @@ def main():
 
     # Generate ordering rules
     if mpiRank == MpiNode.MASTER:
-        print(f"[{time.time() - timeStart:.3f}] Generating ordering rules for {args.iterationTimeLimit} seconds...")
+        print(f"[{time.time() - timeStart:.3f}] Generating ordering rules...")
     rules = set()
-    timeIterationStart = time.time()
-
-    while time.time() - timeIterationStart < args.iterationTimeLimit:
-        rule = Rule(patternStringList)
-        if rule in rules:
-            continue
-        ruleValidity = 1.0
-        for iFile in range(len(args.referenceFiles)):
-            if not rule.evaluate(referencePatternIndices[iFile]):
-                ruleValidity -= 1.0 / len(args.referenceFiles)
-                if ruleValidity < args.ruleValidityThreshold:
-                    break
-        else:
-            rules.add(rule)
+    for i in range(nPatternsLocal[mpiRank]):
+        if args.verbose:
+            print(f"[{time.time() - timeStart:.3f}] Node {mpiRank} generating ordering rules for local pattern {i}/{nPatternsLocal[mpiRank]}...")
+        iPattern = iPatternsLocal[i]
+        for iPatternOther in range(nPatterns):
+            for ruleType in RuleType:
+                rule = Rule(iPattern, iPatternOther, ruleType, patternStringList)
+                if rule in rules:
+                    continue
+                ruleValidity = 1.0
+                for iFile in range(len(args.referenceFiles)):
+                    if not rule.evaluate(referencePatternIndices[iFile]):
+                        ruleValidity -= 1.0 / len(args.referenceFiles)
+                        if ruleValidity < args.ruleValidityThreshold:
+                            break
+                else:
+                    rules.add(rule)
+    if args.verbose:
+        print(f"[{time.time() - timeStart:.3f} {mpiRank}] Node {mpiRank} generated a total of {len(rules)} valid ordering rules.")
 
     mpiComm.Barrier()
     if mpiRank == MpiNode.MASTER:

@@ -128,7 +128,6 @@ Configuration options for `regea_diff.py`
 * `--patternFilename` file to load regex patterns from (should be the file outputted by `regea.py`)
 * `--outputFilenameDiffSuffix` suffix to add to the output diff file
 * `--outputFilenameOrderingSuffix` suffix to add to the output ordering file
-* `--iterationTimeLimit` timeout for generating ordering rules of the file contents
 * `--lineInsertionThreshold` threshold (in standard deviations) for which to import log lines from the training data
 * `--ruleValidityThreshold` the proportion of reference files which must satisfy an ordering rule for the rule to be considered valid
 
