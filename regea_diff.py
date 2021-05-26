@@ -434,9 +434,7 @@ def main():
                 else:
                     rules.add(rule)
     if args.verbose:
-        print(
-            f"[{time.time() - timeStart:.3f} {mpiRank}] Node {mpiRank} generated a total of {len(rules)} valid ordering rules."
-        )
+        print(f"[{time.time() - timeStart:.3f}] Node {mpiRank} generated a total of {len(rules)} valid ordering rules.")
 
     mpiComm.Barrier()
     if mpiRank == MpiNode.MASTER:
