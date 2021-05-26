@@ -103,22 +103,26 @@ class Rule:
         self.patternStringOther = patternStringList[self.iPatternOther]
         self.type = ruleType
 
-    def evaluate(self, patternIndices, iLineTarget=None, resultWhenNotEvaluable=False):
+    def evaluate(self, patternPositions, iLineTarget=None, lineTargetInserted=False, resultWhenNotEvaluable=False):
         if self.iPattern == self.iPatternOther:
             return False
 
-        iPatternMatches = set()
-        iPatternOtherMatches = set()
-
-        for iLine in range(len(patternIndices)):
-            if self.iPattern in patternIndices[iLine]:
-                iPatternMatches.add(iLine)
-            if self.iPatternOther in patternIndices[iLine]:
-                iPatternOtherMatches.add(iLine)
+        iPatternMatches = patternPositions[self.iPattern]
+        iPatternOtherMatches = patternPositions[self.iPatternOther]
 
         if iLineTarget is not None:
-            assert iLineTarget in iPatternMatches
+            # assert iLineTarget in iPatternMatches
             iPatternMatches = set([iLineTarget])
+            if lineTargetInserted:
+                iPatternOtherMatchesNew = set()
+                for iPattern in iPatternOtherMatches:
+                    if iPattern >= iLineTarget:
+                        iPatternOtherMatchesNew.add(iPattern + 1)
+                    else:
+                        iPatternOtherMatchesNew.add(iPattern)
+                iPatternOtherMatches = iPatternOtherMatchesNew
+        else:
+            assert lineTargetInserted == False
 
         iPatternMatches = np.array(list(iPatternMatches))
         iPatternOtherMatches = np.array(list(iPatternOtherMatches))
@@ -367,6 +371,13 @@ def main():
         for iLine in range(len(errorFileContents)):
             errorPatternIndices[iLine] = patternIndices[errorFileContents[iLine]]
 
+        errorPatternPositions = [None] * len(patternStringList)
+        for iPattern in range(len(patternStringList)):
+            errorPatternPositions[iPattern] = set()
+            for iLine in range(len(errorFileContents)):
+                if iPattern in errorPatternIndices[iLine]:
+                    errorPatternPositions[iPattern].add(iLine)
+
         referencePatternIndices = [None] * len(args.referenceFiles)
         for iFile in range(len(args.referenceFiles)):
             referencePatternIndices[iFile] = [None] * len(referenceFileContents[iFile])
@@ -375,13 +386,27 @@ def main():
             assert (
                 len(referencePatternIndices[iFile][iLine]) > 0
             ), f"Line '{referenceFileContents[iFile][iLine]}' in file '{args.referenceFiles[iFile]}' not matched by any pattern. Does the pattern file '{args.patternFilename}' really correspond to the specified reference files?"
+
+        referencePatternPositions = [None] * len(args.referenceFiles)
+        for iFile in range(len(args.referenceFiles)):
+            referencePatternPositions[iFile] = [None] * len(patternStringList)
+            for iPattern in range(len(patternStringList)):
+                referencePatternPositions[iFile][iPattern] = set()
+                for iLine in range(len(referenceFileContents[iFile])):
+                    if iPattern in referencePatternIndices[iFile][iLine]:
+                        referencePatternPositions[iFile][iPattern].add(iLine)
     else:
         patternIndices = None
         errorPatternIndices = None
+        errorPatternPositions = None
         referencePatternIndices = None
+        referencePatternPositions = None
+
     patternIndices = mpiComm.bcast(patternIndices, root=MpiNode.MASTER)
     errorPatternIndices = mpiComm.bcast(errorPatternIndices, root=MpiNode.MASTER)
+    errorPatternPositions = mpiComm.bcast(errorPatternPositions, root=MpiNode.MASTER)
     referencePatternIndices = mpiComm.bcast(referencePatternIndices, root=MpiNode.MASTER)
+    referencePatternPositions = mpiComm.bcast(referencePatternPositions, root=MpiNode.MASTER)
 
     # Generate ordering rules
     if mpiRank == MpiNode.MASTER:
@@ -389,23 +414,29 @@ def main():
     rules = set()
     for i in range(nPatternsLocal[mpiRank]):
         if args.verbose:
-            print(f"[{time.time() - timeStart:.3f}] Node {mpiRank} generating ordering rules for local pattern {i}/{nPatternsLocal[mpiRank]}...")
+            print(
+                f"[{time.time() - timeStart:.3f}] Node {mpiRank} generating ordering rules for local pattern {i}/{nPatternsLocal[mpiRank]}..."
+            )
         iPattern = iPatternsLocal[i]
         for iPatternOther in range(nPatterns):
+            if iPattern == iPatternOther:
+                continue
             for ruleType in RuleType:
                 rule = Rule(iPattern, iPatternOther, ruleType, patternStringList)
                 if rule in rules:
                     continue
                 ruleValidity = 1.0
                 for iFile in range(len(args.referenceFiles)):
-                    if not rule.evaluate(referencePatternIndices[iFile]):
+                    if not rule.evaluate(referencePatternPositions[iFile]):
                         ruleValidity -= 1.0 / len(args.referenceFiles)
                         if ruleValidity < args.ruleValidityThreshold:
                             break
                 else:
                     rules.add(rule)
     if args.verbose:
-        print(f"[{time.time() - timeStart:.3f} {mpiRank}] Node {mpiRank} generated a total of {len(rules)} valid ordering rules.")
+        print(
+            f"[{time.time() - timeStart:.3f} {mpiRank}] Node {mpiRank} generated a total of {len(rules)} valid ordering rules."
+        )
 
     mpiComm.Barrier()
     if mpiRank == MpiNode.MASTER:
@@ -416,17 +447,42 @@ def main():
         mpiComm.send(rules, dest=MpiNode.MASTER, tag=MpiTag.RULES)
     rules = mpiComm.bcast(rules, root=MpiNode.MASTER)
 
-    # Generate ordering heatmap TODO: parallelize
+    # Generate ordering heatmap
+    nLines = len(errorFileContents)
+    nLinesLocal = np.array([nLines // mpiSize] * mpiSize, dtype=np.int_)
+    nLinesLocal[: (nLines % mpiSize)] += 1
+    iLinesLocal = np.zeros(nLinesLocal[mpiRank], dtype=np.int_)
     if mpiRank == MpiNode.MASTER:
         print(f"[{time.time() - timeStart:.3f}] Generated a total of {len(rules)} valid ordering rules.")
         print(f"[{time.time() - timeStart:.3f}] Checking for violated ordering rules...")
-        orderingHeatmap = np.zeros(len(errorFileContents), dtype=np.int_)
-        for iLine in range(len(errorFileContents)):  # TODO: parallelize (mpi reduce?)
-            rulesForLine = [rule for rule in rules if rule.iPattern in errorPatternIndices[iLine]]
-            for rule in rulesForLine:
-                if not rule.evaluate(errorPatternIndices, iLineTarget=iLine, resultWhenNotEvaluable=True):
-                    orderingHeatmap[iLine] += 1
-        orderingHeatmapMax = max(orderingHeatmap)
+        iLines = np.linspace(0, nLines - 1, nLines, dtype=np.int_)
+    else:
+        iLines = None
+
+    displacement = [0] * mpiSize
+    for iNode in range(1, mpiSize):
+        displacement[iNode] = displacement[iNode - 1] + nLinesLocal[iNode - 1]
+
+    mpiComm.Scatterv(
+        (iLines, nLinesLocal, displacement, mpiTypeMap[iLinesLocal.dtype]), iLinesLocal, root=MpiNode.MASTER
+    )
+    mpiComm.Barrier()
+
+    orderingHeatmap = np.zeros(nLines, dtype=np.int_)
+    orderingHeatmapLocal = np.zeros(nLines, dtype=np.int_)
+    for i in range(nLinesLocal[mpiRank]):
+        iLine = iLinesLocal[i]
+        rulesForLine = [rule for rule in rules if rule.iPattern in errorPatternIndices[iLine]]
+        for rule in rulesForLine:
+            if not rule.evaluate(errorPatternPositions, iLineTarget=iLine, resultWhenNotEvaluable=True):
+                orderingHeatmapLocal[iLine] += 1
+        if args.verbose:
+            print(
+                f"[{time.time() - timeStart:.3f}] Line {iLine}/{len(errorFileContents)} violates {orderingHeatmapLocal[iLine]} ordering rules."
+            )
+
+    mpiComm.Barrier()
+    mpiComm.Reduce(orderingHeatmapLocal, orderingHeatmap, op=MPI.MAX, root=MpiNode.MASTER)
 
     # Check for unmatched lines TODO: parellelize
     if mpiRank == MpiNode.MASTER:
@@ -526,13 +582,10 @@ def main():
         rulesForLine = [rule for rule in rules if rule.iPattern in patternIndices[lineToInsert]]
         nRuleViolations = np.zeros(len(errorFileContents), dtype=np.int_)
         for iInsert in range(len(errorFileContents)):
-            errorFileContentsTemp = errorFileContents.copy()
-            errorFileContentsTemp.insert(iInsert, lineToInsert)
-            errorPatternIndicesTemp = errorPatternIndices.copy()
-            errorPatternIndicesTemp.insert(iInsert, patternIndices[lineToInsert])
-
             for rule in rulesForLine:
-                if not rule.evaluate(errorPatternIndicesTemp, iLineTarget=iInsert, resultWhenNotEvaluable=True):
+                if not rule.evaluate(
+                    errorPatternPositions, iLineTarget=iInsert, lineTargetInserted=True, resultWhenNotEvaluable=True
+                ):
                     nRuleViolations[iInsert] += 1
         insertPositionsLocal[iLinesToInsertLocal[i]] = nRuleViolations.argmin()
         if args.verbose:
