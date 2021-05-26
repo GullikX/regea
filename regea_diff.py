@@ -89,8 +89,8 @@ class Stream(enum.IntEnum):
 class RuleType(enum.IntEnum):
     BEFORE_ALL = 0
     AFTER_ALL = 1
-    BEFORE_ANY = 2
-    AFTER_ANY = 3
+    BEFORE_SOME = 2
+    AFTER_SOME = 3
     DIRECTLY_BEFORE = 4
     DIRECTLY_AFTER = 5
 
@@ -138,11 +138,11 @@ class Rule:
             for iPatternMatch in iPatternMatches:
                 if not iPatternMatch > max(iPatternOtherMatches):
                     return False
-        elif self.type == RuleType.BEFORE_ANY:
+        elif self.type == RuleType.BEFORE_SOME:
             for iPatternMatch in iPatternMatches:
                 if not iPatternMatch < max(iPatternOtherMatches):
                     return False
-        elif self.type == RuleType.AFTER_ANY:
+        elif self.type == RuleType.AFTER_SOME:
             for iPatternMatch in iPatternMatches:
                 if not iPatternMatch > min(iPatternOtherMatches):
                     return False
