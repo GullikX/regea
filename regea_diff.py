@@ -494,13 +494,11 @@ def main():
         print(f"[{time.time() - timeStart:.3f}] Calculating pattern match frequencies...")
     referenceFrequencies = np.zeros((len(args.referenceFiles), nPatterns))
     for iFile in range(len(args.referenceFiles)):
-        for iLine in range(len(referenceFileContents[iFile])):
-            for iPattern in referencePatternIndices[iFile][iLine]:
-                referenceFrequencies[iFile][iPattern] += 1
+        for iPattern in range(len(patternStringList)):
+            referenceFrequencies[iFile][iPattern] = len(referencePatternPositions[iFile][iPattern])
     errorFrequencies = np.zeros(nPatterns)
-    for iLine in range(len(errorFileContents)):
-        for iPattern in errorPatternIndices[iLine]:
-            errorFrequencies[iPattern] += 1
+    for iPattern in range(len(patternStringList)):
+        errorFrequencies[iPattern] = len(errorPatternPositions[iPattern])
     frequencyMeans = referenceFrequencies.mean(axis=0)
     frequencyStddevs = referenceFrequencies.std(axis=0)
     assert len(frequencyMeans) == nPatterns
